@@ -7,7 +7,11 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 object FormatUtils {
-    private val dateFormatter = SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US)
+    private val dateFormatter = object : ThreadLocal<SimpleDateFormat>() {
+        override fun initialValue(): SimpleDateFormat {
+            return SimpleDateFormat("yyyy/MM/dd  HH:mm", Locale.US)
+        }
+    }
 
     fun formatBytes(bytes: Long): String {
         if (bytes <= 0L) return "0 ب"
@@ -24,7 +28,9 @@ object FormatUtils {
 
     fun formatDate(millis: Long, unknownLabel: String = "غير معروف"): String {
         if (millis <= 0L) return unknownLabel
-        return dateFormatter.format(Date(millis))
+        return runCatching {
+            dateFormatter.get()?.format(Date(millis)) ?: unknownLabel
+        }.getOrDefault(unknownLabel)
     }
 
     fun formatCountItems(count: Int): String = when {

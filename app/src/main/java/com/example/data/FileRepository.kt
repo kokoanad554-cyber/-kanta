@@ -66,8 +66,8 @@ class FileRepository(private val context: Context) {
         }
     }
 
-    fun hasStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+    fun hasStoragePermission(): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
             ContextCompat.checkSelfPermission(
@@ -75,82 +75,88 @@ class FileRepository(private val context: Context) {
                 Manifest.permission.READ_EXTERNAL_STORAGE
             ) == PackageManager.PERMISSION_GRANTED
         }
-    }
+    }.getOrDefault(false)
 
-    fun getInternalRootPath(): String =
-        Environment.getExternalStorageDirectory()?.absolutePath ?: "/storage/emulated/0"
+    fun getInternalRootPath(): String = runCatching {
+        Environment.getExternalStorageDirectory()?.absolutePath
+    }.getOrNull() ?: "/storage/emulated/0"
 
-    fun getStorageStats(): StorageStats {
-        return try {
+    suspend fun getStorageStats(): StorageStats = withContext(Dispatchers.IO) {
+        runCatching {
             val stat = StatFs(getInternalRootPath())
             val total = stat.totalBytes
             val free = stat.availableBytes
             StorageStats(totalBytes = total, freeBytes = free)
-        } catch (_: Exception) {
-            StorageStats(0L, 0L)
-        }
+        }.getOrDefault(StorageStats(0L, 0L))
     }
 
-    fun getStorageRoots(safUris: List<String>, showSystemPaths: Boolean): List<StorageRoot> {
-        val roots = mutableListOf<StorageRoot>()
-        val internalPath = getInternalRootPath()
-        roots += StorageRoot(
-            id = "internal",
-            title = "الذاكرة الداخلية",
-            path = internalPath,
-            type = StorageRootType.INTERNAL
-        )
-
-        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        if (downloads != null && downloads.exists()) {
+    suspend fun getStorageRoots(safUris: List<String>, showSystemPaths: Boolean): List<StorageRoot> =
+        withContext(Dispatchers.IO) {
+            val roots = mutableListOf<StorageRoot>()
+            val internalPath = getInternalRootPath()
             roots += StorageRoot(
-                id = "downloads",
-                title = "التنزيلات",
-                path = downloads.absolutePath,
-                type = StorageRootType.DOWNLOADS
+                id = "internal",
+                title = "الذاكرة الداخلية",
+                path = internalPath,
+                type = StorageRootType.INTERNAL
             )
-        }
 
-        val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-        if (docs != null && docs.exists()) {
-            roots += StorageRoot(
-                id = "documents",
-                title = "المستندات",
-                path = docs.absolutePath,
-                type = StorageRootType.DOCUMENTS
-            )
-        }
+            runCatching {
+                val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (downloads != null && downloads.exists()) {
+                    roots += StorageRoot(
+                        id = "downloads",
+                        title = "التنزيلات",
+                        path = downloads.absolutePath,
+                        type = StorageRootType.DOWNLOADS
+                    )
+                }
+            }
 
-        if (showSystemPaths) {
-            roots += StorageRoot(
-                id = "system",
-                title = "مسارات النظام",
-                path = "/system",
-                type = StorageRootType.SYSTEM
-            )
-            roots += StorageRoot(
-                id = "root",
-                title = "جذر النظام (/)",
-                path = "/",
-                type = StorageRootType.SYSTEM
-            )
-        }
+            runCatching {
+                val docs = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                if (docs != null && docs.exists()) {
+                    roots += StorageRoot(
+                        id = "documents",
+                        title = "المستندات",
+                        path = docs.absolutePath,
+                        type = StorageRootType.DOCUMENTS
+                    )
+                }
+            }
 
-        safUris.forEachIndexed { index, uriStr ->
-            val uri = Uri.parse(uriStr)
-            val doc = runCatching { DocumentFile.fromTreeUri(context, uri) }.getOrNull()
-            if (doc != null && doc.exists()) {
+            if (showSystemPaths) {
                 roots += StorageRoot(
-                    id = "saf_$index",
-                    title = doc.name ?: "مجلد خارجي",
-                    path = uriStr,
-                    type = StorageRootType.SAF_TREE,
-                    safUri = uri
+                    id = "system",
+                    title = "مسارات النظام",
+                    path = "/system",
+                    type = StorageRootType.SYSTEM
+                )
+                roots += StorageRoot(
+                    id = "root",
+                    title = "جذر النظام (/)",
+                    path = "/",
+                    type = StorageRootType.SYSTEM
                 )
             }
+
+            safUris.forEachIndexed { index, uriStr ->
+                runCatching {
+                    val uri = Uri.parse(uriStr)
+                    val doc = DocumentFile.fromTreeUri(context, uri)
+                    if (doc != null && doc.exists()) {
+                        roots += StorageRoot(
+                            id = "saf_$index",
+                            title = doc.name ?: "مجلد خارجي",
+                            path = uriStr,
+                            type = StorageRootType.SAF_TREE,
+                            safUri = uri
+                        )
+                    }
+                }
+            }
+            roots
         }
-        return roots
-    }
 
     suspend fun listDirectory(
         path: String,
@@ -165,6 +171,7 @@ class FileRepository(private val context: Context) {
                     ?: throw IllegalStateException("تعذر الوصول إلى مجلد SAF")
                 val children = doc.listFiles()
                 children.mapNotNull { child ->
+                    coroutineContext.ensureActive()
                     val name = child.name ?: return@mapNotNull null
                     if (!showHidden && name.startsWith(".")) return@mapNotNull null
                     val isDir = child.isDirectory
@@ -193,11 +200,11 @@ class FileRepository(private val context: Context) {
                 val children = dir.listFiles()
                     ?: throw IllegalStateException("لا توجد صلاحية لقراءة محتوى هذا المسار")
                 children.mapNotNull { file ->
+                    coroutineContext.ensureActive()
                     val name = file.name
                     if (!showHidden && (file.isHidden || name.startsWith("."))) return@mapNotNull null
                     val isDir = file.isDirectory
                     val (ext, cat) = classifyFile(name, isDir)
-                    val count = if (isDir) countDirectoryChildrenFast(file) else null
                     FileItem(
                         id = file.absolutePath,
                         name = name,
@@ -211,12 +218,31 @@ class FileRepository(private val context: Context) {
                         extension = ext,
                         category = cat,
                         safUri = null,
-                        childCount = count
+                        childCount = null
                     )
                 }
             }
             sortItems(rawItems, sortOption)
         }
+    }
+
+    suspend fun resolveSubfolderCounts(
+        items: List<FileItem>,
+        maxFolders: Int = 35
+    ): Map<String, Int> = withContext(Dispatchers.IO) {
+        val result = HashMap<String, Int>()
+        var processed = 0
+        for (item in items) {
+            coroutineContext.ensureActive()
+            if (!item.isDirectory || item.safUri != null) continue
+            if (processed >= maxFolders) break
+            processed++
+            val count = countDirectoryChildrenFast(File(item.path))
+            if (count != null) {
+                result[item.id] = count
+            }
+        }
+        result
     }
 
     private fun countDirectoryChildrenFast(dir: File): Int? {

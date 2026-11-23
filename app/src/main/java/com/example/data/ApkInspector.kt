@@ -86,7 +86,7 @@ class ApkInspector(private val context: Context) {
         } else true
     }
 
-    fun openInstallPermissionSettings() {
+    fun openInstallPermissionSettings(): Result<Unit> = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                 data = Uri.parse("package:${context.packageName}")

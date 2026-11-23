@@ -162,7 +162,7 @@ fun FloatingCapsuleNavBar(
                         label = "nav_item_scale"
                     )
 
-                    val itemShape = RoundedCornerShape(pillRadius)
+                    val itemShape = RoundedCornerShape(pillRadius.coerceAtLeast(0.dp))
 
                     Box(
                         modifier = Modifier

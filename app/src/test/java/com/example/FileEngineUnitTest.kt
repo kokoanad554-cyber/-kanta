@@ -24,6 +24,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.file.Files
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -66,6 +69,25 @@ class FileEngineUnitTest {
         assertEquals("غير معروف", FormatUtils.formatDate(0L))
         assertEquals("Unknown", FormatUtils.formatDate(-5L, "Unknown"))
         assertTrue(FormatUtils.formatDate(1_700_000_000_000L).contains("/"))
+    }
+
+    @Test
+    fun `formatDate is thread-safe under concurrent multi-thread formatting`() {
+        val pool = Executors.newFixedThreadPool(8)
+        try {
+            val timestamp = 1_700_000_000_000L
+            val expected = FormatUtils.formatDate(timestamp)
+            val tasks = (1..200).map { idx ->
+                Callable {
+                    val res = FormatUtils.formatDate(timestamp + idx * 1_000L)
+                    res.isNotBlank() && res.contains("/") && res.length == expected.length
+                }
+            }
+            val futures = pool.invokeAll(tasks)
+            assertTrue(futures.all { it.get(5, TimeUnit.SECONDS) })
+        } finally {
+            pool.shutdownNow()
+        }
     }
 
     @Test

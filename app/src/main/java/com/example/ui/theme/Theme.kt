@@ -60,7 +60,11 @@ fun KantaFilesTheme(
 
     val context = LocalContext.current
     val colorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        runCatching {
+            if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }.getOrElse {
+            paletteColorScheme(colorPalette, useDarkTheme)
+        }
     } else {
         paletteColorScheme(colorPalette, useDarkTheme)
     }
@@ -68,11 +72,13 @@ fun KantaFilesTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as? Activity)?.window
-            if (window != null) {
-                WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = !useDarkTheme
-                    isAppearanceLightNavigationBars = !useDarkTheme
+            runCatching {
+                val window = (view.context as? Activity)?.window
+                if (window != null) {
+                    WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = !useDarkTheme
+                        isAppearanceLightNavigationBars = !useDarkTheme
+                    }
                 }
             }
         }

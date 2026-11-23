@@ -24,15 +24,17 @@ import com.example.model.SortOption
 import com.example.model.StorageRoot
 import com.example.model.StorageStats
 import com.example.model.UserPreferences
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 sealed interface ActiveViewer {
@@ -88,20 +90,33 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     private fun currentStrings(): AppStrings = stringsForLanguage(preferences.value.language)
 
+    private val safeExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                errorMessage = throwable.message ?: currentStrings().errOpenFolder
+            )
+        }
+    }
+
     private val _uiState = MutableStateFlow(
         ExplorerUiState(
-            hasStoragePermission = fileRepository.hasStoragePermission(),
-            currentPath = fileRepository.getInternalRootPath()
+            hasStoragePermission = false,
+            currentPath = "",
+            isLoading = true
         )
     )
     val uiState: StateFlow<ExplorerUiState> = _uiState.asStateFlow()
 
     private val safNavStack = mutableListOf<BreadcrumbSegment>()
     private var activeOperationJob: Job? = null
+    private var loadDirJob: Job? = null
+    private var childCountJob: Job? = null
+    private var refreshRootsJob: Job? = null
+    private var hasCompletedInitialLoad = false
 
     init {
-        refreshPermissionAndRoots()
-        viewModelScope.launch {
+        viewModelScope.launch(safeExceptionHandler) {
             var initialized = false
             var lastShowHidden = preferences.value.showHiddenFiles
             var lastSort = preferences.value.defaultSortOption
@@ -122,8 +137,22 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
                 if (!initialized) {
                     initialized = true
-                    _uiState.update { it.copy(sortOption = prefs.defaultSortOption) }
-                    loadDirectory(fileRepository.getInternalRootPath(), null)
+                    val (hasPerm, internalRoot, stats) = withContext(Dispatchers.IO) {
+                        Triple(
+                            fileRepository.hasStoragePermission(),
+                            fileRepository.getInternalRootPath(),
+                            fileRepository.getStorageStats()
+                        )
+                    }
+                    _uiState.update {
+                        it.copy(
+                            hasStoragePermission = hasPerm,
+                            currentPath = internalRoot,
+                            storageStats = stats,
+                            sortOption = prefs.defaultSortOption
+                        )
+                    }
+                    loadDirectory(internalRoot, null)
                 } else if (hiddenChanged) {
                     _uiState.update { it.copy(sortOption = prefs.defaultSortOption) }
                     refreshCurrentDirectory()
@@ -140,19 +169,27 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun refreshPermissionAndRoots() {
-        val prefs = preferences.value
-        val hasPerm = fileRepository.hasStoragePermission()
-        val stats = fileRepository.getStorageStats()
-        val roots = fileRepository.getStorageRoots(prefs.safTreeUris, prefs.showSystemPaths)
-        _uiState.update {
-            it.copy(
-                hasStoragePermission = hasPerm,
-                storageStats = stats,
-                storageRoots = roots
-            )
-        }
-        if (hasPerm) {
-            refreshCurrentDirectory()
+        refreshRootsJob?.cancel()
+        refreshRootsJob = viewModelScope.launch(safeExceptionHandler) {
+            val prefs = preferences.value
+            val prevPerm = _uiState.value.hasStoragePermission
+            val (hasPerm, stats, roots) = withContext(Dispatchers.IO) {
+                Triple(
+                    fileRepository.hasStoragePermission(),
+                    fileRepository.getStorageStats(),
+                    fileRepository.getStorageRoots(prefs.safTreeUris, prefs.showSystemPaths)
+                )
+            }
+            _uiState.update {
+                it.copy(
+                    hasStoragePermission = hasPerm,
+                    storageStats = stats,
+                    storageRoots = roots
+                )
+            }
+            if (!prevPerm && hasPerm && hasCompletedInitialLoad) {
+                refreshCurrentDirectory()
+            }
         }
     }
 
@@ -241,7 +278,10 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun loadDirectory(path: String, safUri: Uri?) {
-        viewModelScope.launch {
+        if (path.isEmpty() && safUri == null) return
+        loadDirJob?.cancel()
+        childCountJob?.cancel()
+        loadDirJob = viewModelScope.launch(safeExceptionHandler) {
             _uiState.update {
                 it.copy(
                     isLoading = true,
@@ -256,6 +296,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 showHidden = prefs.showHiddenFiles,
                 sortOption = _uiState.value.sortOption
             )
+            hasCompletedInitialLoad = true
             result.fold(
                 onSuccess = { items ->
                     val crumbs = if (safUri != null) {
@@ -263,6 +304,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                     } else {
                         buildPathBreadcrumbs(path)
                     }
+                    val stats = fileRepository.getStorageStats()
                     _uiState.update { state ->
                         val filtered = filterItems(items, state.searchQuery)
                         state.copy(
@@ -273,8 +315,27 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                             displayedItems = filtered,
                             isLoading = false,
                             errorMessage = null,
-                            storageStats = fileRepository.getStorageStats()
+                            storageStats = stats
                         )
+                    }
+                    // Populate subfolder item counts lazily off the main thread
+                    if (safUri == null && items.any { it.isDirectory }) {
+                        childCountJob = viewModelScope.launch(safeExceptionHandler) {
+                            val counts = fileRepository.resolveSubfolderCounts(items)
+                            if (counts.isNotEmpty()) {
+                                _uiState.update { st ->
+                                    if (st.currentPath != path) return@update st
+                                    val updatedRaw = st.rawItems.map { item ->
+                                        val c = counts[item.id]
+                                        if (c != null) item.copy(childCount = c) else item
+                                    }
+                                    st.copy(
+                                        rawItems = updatedRaw,
+                                        displayedItems = filterItems(updatedRaw, st.searchQuery)
+                                    )
+                                }
+                            }
+                        }
                     }
                 },
                 onFailure = { err ->
@@ -668,7 +729,9 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun installApk(metadata: ApkMetadata) {
         if (!apkInspector.canRequestPackageInstalls()) {
             showSnackbar(currentStrings().msgAllowApkInstall)
-            apkInspector.openInstallPermissionSettings()
+            apkInspector.openInstallPermissionSettings().onFailure {
+                showSnackbar(currentStrings().errLaunchInstaller)
+            }
             return
         }
         apkInspector.launchInstaller(metadata).onFailure {

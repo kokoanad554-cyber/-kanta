@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -70,6 +71,9 @@ class ScallopedCookieShape(
         val cx = size.width / 2f
         val cy = size.height / 2f
         val baseRadius = minOf(cx, cy)
+        if (baseRadius <= 0f) {
+            return Outline.Rectangle(Rect.Zero)
+        }
         val steps = lobes * 10
         val path = Path()
         for (i in 0..steps) {
@@ -130,7 +134,7 @@ fun ExpressiveSurface(
         label = "m3e_scale"
     )
 
-    val shape = RoundedCornerShape(animCorner)
+    val shape = RoundedCornerShape(animCorner.coerceAtLeast(0.dp))
 
     Surface(
         shape = shape,

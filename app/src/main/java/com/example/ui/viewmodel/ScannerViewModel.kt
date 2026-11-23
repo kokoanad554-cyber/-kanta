@@ -11,6 +11,8 @@ import com.example.localization.AppStrings
 import com.example.localization.stringsForLanguage
 import com.example.model.FileItem
 import com.example.model.FileOperationProgress
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class ScanScope {
     ALL_INTERNAL,
@@ -54,6 +57,16 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     private var scanJob: Job? = null
 
+    private val safeExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        _uiState.update {
+            it.copy(
+                isScanning = false,
+                operationProgress = null,
+                snackbarMessage = throwable.message
+            )
+        }
+    }
+
     val presetExtensions = listOf("html", "txt", "apk", "zip", "pdf", "json", "xml", "log", "mp3", "mp4")
 
     private suspend fun currentStrings(): AppStrings =
@@ -88,23 +101,26 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
         val targetExtensions = state.selectedPresetExtensions + customExts
         if (targetExtensions.isEmpty()) {
-            viewModelScope.launch {
+            viewModelScope.launch(safeExceptionHandler) {
                 val s = currentStrings()
                 _uiState.update { it.copy(snackbarMessage = s.scannerSelectOneExt) }
             }
             return
         }
 
-        val rootPath = when (state.scanScope) {
-            ScanScope.ALL_INTERNAL -> fileRepository.getInternalRootPath()
-            ScanScope.DOWNLOADS -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-            ScanScope.DOCUMENTS -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
-        }
-
         scanJob?.cancel()
-        scanJob = viewModelScope.launch {
+        scanJob = viewModelScope.launch(safeExceptionHandler) {
             val prefs = preferencesRepository.preferencesFlow.first()
             val s = stringsForLanguage(prefs.language)
+            val rootPath = withContext(Dispatchers.IO) {
+                runCatching {
+                    when (state.scanScope) {
+                        ScanScope.ALL_INTERNAL -> fileRepository.getInternalRootPath()
+                        ScanScope.DOWNLOADS -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+                        ScanScope.DOCUMENTS -> Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath
+                    }
+                }.getOrElse { fileRepository.getInternalRootPath() }
+            }
             _uiState.update {
                 it.copy(
                     isScanning = true,

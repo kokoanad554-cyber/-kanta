@@ -7,12 +7,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -57,7 +56,7 @@ import com.example.ui.viewmodel.SettingsViewModel
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        runCatching { enableEdgeToEdge() }
         setContent {
             KantaFilesRootApp()
         }
@@ -124,20 +123,20 @@ fun KantaFilesRootApp(
                         startDestination = AppDestination.FILES.route,
                         enterTransition = {
                             if (prefs.expressiveAnimations) {
-                                fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                                    scaleIn(initialScale = 0.96f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)) +
-                                    slideInHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { it / 16 }
+                                fadeIn(tween(180)) +
+                                    scaleIn(
+                                        initialScale = 0.96f,
+                                        animationSpec = spring(
+                                            dampingRatio = Spring.DampingRatioLowBouncy,
+                                            stiffness = Spring.StiffnessMedium
+                                        )
+                                    )
                             } else {
-                                fadeIn()
+                                fadeIn(tween(120))
                             }
                         },
                         exitTransition = {
-                            if (prefs.expressiveAnimations) {
-                                fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
-                                    slideOutHorizontally { -it / 16 }
-                            } else {
-                                fadeOut()
-                            }
+                            fadeOut(tween(130))
                         },
                         modifier = Modifier.fillMaxSize()
                     ) {

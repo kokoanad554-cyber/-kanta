@@ -484,21 +484,31 @@ fun FileExplorerScreen(
                                 Button(
                                     onClick = {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                            runCatching {
+                                            val launchedAppSettings = runCatching {
                                                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                                                     data = Uri.parse("package:${context.packageName}")
                                                 }
                                                 context.startActivity(intent)
-                                            }.onFailure {
-                                                context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                                            }.isSuccess
+                                            if (!launchedAppSettings) {
+                                                val launchedGeneralSettings = runCatching {
+                                                    context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                                                }.isSuccess
+                                                if (!launchedGeneralSettings) {
+                                                    runCatching { safLauncher.launch(null) }
+                                                }
                                             }
                                         } else {
-                                            legacyPermissionLauncher.launch(
-                                                arrayOf(
-                                                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                                                    Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                            runCatching {
+                                                legacyPermissionLauncher.launch(
+                                                    arrayOf(
+                                                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                                                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                                                    )
                                                 )
-                                            )
+                                            }.onFailure {
+                                                runCatching { safLauncher.launch(null) }
+                                            }
                                         }
                                     },
                                     modifier = Modifier
@@ -509,7 +519,7 @@ fun FileExplorerScreen(
                                     Text(strings.grantPermission)
                                 }
                                 OutlinedButton(
-                                    onClick = { safLauncher.launch(null) },
+                                    onClick = { runCatching { safLauncher.launch(null) } },
                                     modifier = Modifier
                                         .weight(1f)
                                         .heightIn(min = 48.dp)
@@ -611,7 +621,7 @@ fun FileExplorerScreen(
                             }
                             item(key = "add_saf_pill") {
                                 ExpressiveSurface(
-                                    onClick = { safLauncher.launch(null) },
+                                    onClick = { runCatching { safLauncher.launch(null) } },
                                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                                     restingCornerRadius = 20.dp,
@@ -943,7 +953,7 @@ fun FileExplorerScreen(
                 shape = CookieShape10,
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shadowElevation = 6.dp,
+                tonalElevation = 6.dp,
                 modifier = Modifier
                     .size(60.dp)
                     .testTag("explorer_fab_main")
