@@ -21,6 +21,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -63,6 +65,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.NoteAdd
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
@@ -81,8 +84,11 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.SelectAll
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Unarchive
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -117,10 +123,13 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.FileProTools
 import com.example.localization.LocalAppStrings
 import com.example.model.ClipboardAction
 import com.example.model.FileCategory
@@ -128,6 +137,7 @@ import com.example.model.FileItem
 import com.example.model.ListDensity
 import com.example.model.SortOption
 import com.example.model.StorageRootType
+import com.example.ui.components.BatchRenameDialog
 import com.example.ui.components.CompressZipDialog
 import com.example.ui.components.CookieShape10
 import com.example.ui.components.CreateFileDialog
@@ -171,14 +181,22 @@ fun FileExplorerScreen(
         }
     ).asPaddingValues()
 
+    val prefs by viewModel.preferences.collectAsStateWithLifecycle()
+
     var showSearch by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showFabMenu by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showCreateFileDialog by remember { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<FileItem?>(null) }
+    var batchRenameTargets by remember { mutableStateOf<List<FileItem>?>(null) }
     var deleteTargets by remember { mutableStateOf<List<FileItem>?>(null) }
     var compressTargets by remember { mutableStateOf<List<FileItem>?>(null) }
+
+    val isCurrentFavorite = remember(prefs.favoriteFolders, uiState.currentPath, uiState.currentSafUri) {
+        val curSaf = uiState.currentSafUri?.toString()
+        prefs.favoriteFolders.any { it.path == uiState.currentPath && it.safUri == curSaf }
+    }
 
     val safLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -204,7 +222,7 @@ fun FileExplorerScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    BackHandler(enabled = uiState.isSelectionMode || uiState.breadcrumbs.size > 1) {
+    BackHandler(enabled = uiState.isSelectionMode || uiState.isInsideArchive || uiState.breadcrumbs.size > 1) {
         viewModel.navigateUp()
     }
 
@@ -258,7 +276,7 @@ fun FileExplorerScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                if (uiState.breadcrumbs.size > 1 || uiState.isSelectionMode) {
+                                if (uiState.breadcrumbs.size > 1 || uiState.isSelectionMode || uiState.isInsideArchive) {
                                     ExpressiveIconButton(
                                         onClick = { viewModel.navigateUp() },
                                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -283,7 +301,11 @@ fun FileExplorerScreen(
                                             strings.selectedCount(uiState.selectedIds.size)
                                         } else {
                                             val lastTitle = uiState.breadcrumbs.lastOrNull()?.title
-                                            if (uiState.breadcrumbs.size <= 1) strings.appTitle else (lastTitle ?: strings.appTitle)
+                                            if (uiState.breadcrumbs.size <= 1 && !uiState.isInsideArchive) {
+                                                strings.appTitle
+                                            } else {
+                                                lastTitle ?: strings.appTitle
+                                            }
                                         },
                                         transitionSpec = {
                                             (fadeIn() + scaleIn(initialScale = 0.96f)) togetherWith fadeOut()
@@ -299,9 +321,19 @@ fun FileExplorerScreen(
                                         )
                                     }
                                     Text(
-                                        text = strings.itemCountText(uiState.displayedItems.size),
+                                        text = if (uiState.isInsideArchive) {
+                                            "${uiState.archiveBrowse?.archiveItem?.name.orEmpty()} • ${strings.itemCountText(uiState.displayedItems.size)}"
+                                        } else {
+                                            strings.itemCountText(uiState.displayedItems.size)
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (uiState.isInsideArchive) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -310,6 +342,48 @@ fun FileExplorerScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                if (uiState.isInsideArchive) {
+                                    ExpressiveIconButton(
+                                        onClick = {
+                                            uiState.archiveBrowse?.archiveItem?.let {
+                                                viewModel.testArchiveIntegrity(it)
+                                            }
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        size = 48.dp,
+                                        modifier = Modifier.testTag("archive_verify_button")
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.VerifiedUser,
+                                            contentDescription = strings.testArchive,
+                                            modifier = Modifier.size(21.dp)
+                                        )
+                                    }
+                                } else {
+                                    ExpressiveIconButton(
+                                        onClick = { viewModel.toggleFavoriteCurrentFolder() },
+                                        containerColor = if (isCurrentFavorite) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainerHigh
+                                        },
+                                        contentColor = if (isCurrentFavorite) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        size = 48.dp,
+                                        modifier = Modifier.testTag("toggle_favorite_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isCurrentFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                            contentDescription = if (isCurrentFavorite) strings.favoriteRemove else strings.favoriteAdd,
+                                            modifier = Modifier.size(21.dp)
+                                        )
+                                    }
+                                }
+
                                 ExpressiveIconButton(
                                     onClick = {
                                         showSearch = !showSearch
@@ -477,18 +551,59 @@ fun FileExplorerScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 360.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = safeInsets.calculateStartPadding(layoutDir) + (if (isTvMode) 22.dp else 16.dp),
-                        end = safeInsets.calculateEndPadding(layoutDir) + (if (isTvMode) 28.dp else 16.dp),
-                        top = 6.dp,
-                        bottom = safeInsets.calculateBottomPadding() + (if (useSideRail) 36.dp else 148.dp)
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 10.dp)
+                val navTransitionKey = remember(
+                    uiState.currentPath,
+                    uiState.archiveBrowse?.archiveItem?.id,
+                    uiState.archiveBrowse?.innerPath
                 ) {
+                    Triple(uiState.currentPath, uiState.archiveBrowse?.archiveItem?.id, uiState.archiveBrowse?.innerPath)
+                }
+                AnimatedContent(
+                    targetState = navTransitionKey,
+                    transitionSpec = {
+                        val dirSign = if (layoutDir == LayoutDirection.Rtl) -1 else 1
+                        val navDir = uiState.navDirection
+                        if (!expressive || navDir == 0) {
+                            fadeIn(tween(150)) togetherWith fadeOut(tween(120))
+                        } else {
+                            val slideSign = if (navDir > 0) dirSign else -dirSign
+                            (slideInHorizontally(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                ),
+                                initialOffsetX = { width -> (width * 0.18f * slideSign).toInt() }
+                            ) + scaleIn(
+                                initialScale = 0.94f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            ) + fadeIn(tween(210))) togetherWith
+                                (slideOutHorizontally(
+                                    animationSpec = tween(180),
+                                    targetOffsetX = { width -> (-width * 0.12f * slideSign).toInt() }
+                                ) + scaleOut(
+                                    targetScale = 0.96f,
+                                    animationSpec = tween(180)
+                                ) + fadeOut(tween(140)))
+                        }
+                    },
+                    label = "folder_navigation_transition",
+                    modifier = Modifier.fillMaxSize()
+                ) { _ ->
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 360.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = safeInsets.calculateStartPadding(layoutDir) + (if (isTvMode) 22.dp else 16.dp),
+                            end = safeInsets.calculateEndPadding(layoutDir) + (if (isTvMode) 28.dp else 16.dp),
+                            top = 6.dp,
+                            bottom = safeInsets.calculateBottomPadding() + (if (useSideRail) 36.dp else 148.dp)
+                        ),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 10.dp)
+                    ) {
 
             // Permission Request Banner
             if (!uiState.hasStoragePermission) {
@@ -579,118 +694,215 @@ fun FileExplorerScreen(
                 }
             }
 
-            // Storage Stats (with Google Play-style wavy progress bar) & Quick Roots Strip
-            item(key = "storage_strip", span = { GridItemSpan(maxLineSpan) }) {
-                Surface(
-                    shape = RoundedCornerShape(22.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+            // Storage Stats, Quick Roots, Android/data & obb SAF Shortcuts, and Favorites
+            if (!uiState.isInsideArchive) {
+                item(key = "storage_strip", span = { GridItemSpan(maxLineSpan) }) {
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (uiState.storageStats.totalBytes > 0L) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Storage,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = strings.storageSpace,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                                Text(
-                                    text = strings.storageAvailableOf(
-                                        strings.formatBytes(uiState.storageStats.freeBytes),
-                                        strings.formatBytes(uiState.storageStats.totalBytes)
-                                    ),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            ExpressiveWavyProgressIndicator(
-                                progress = { animatedStorageFraction },
-                                animateWhenDeterminate = false,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            items(uiState.storageRoots, key = { it.id }) { root ->
-                                val isCurrent = uiState.currentPath == root.path
-                                val rootLabel = when (root.type) {
-                                    StorageRootType.INTERNAL -> strings.rootInternal
-                                    StorageRootType.DOWNLOADS -> strings.rootDownloads
-                                    StorageRootType.DOCUMENTS -> strings.rootDocuments
-                                    StorageRootType.EXTERNAL_USB -> "${strings.rootExternalUsb}: ${root.title}"
-                                    StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
-                                    StorageRootType.SAF_TREE -> root.title
-                                }
-                                ExpressiveSurface(
-                                    onClick = { viewModel.navigateToRoot(root) },
-                                    containerColor = if (isCurrent) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHigh
-                                    },
-                                    contentColor = if (isCurrent) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                    restingCornerRadius = 20.dp,
-                                    pressedCornerRadius = 11.dp
-                                ) {
-                                    Text(
-                                        text = rootLabel,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
-                                    )
-                                }
-                            }
-                            item(key = "add_saf_pill") {
-                                ExpressiveSurface(
-                                    onClick = { runCatching { safLauncher.launch(null) } },
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    restingCornerRadius = 20.dp,
-                                    pressedCornerRadius = 11.dp,
-                                    modifier = Modifier.testTag("add_saf_folder_button")
+                            if (uiState.storageStats.totalBytes > 0L) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
-                                            Icons.Rounded.FolderSpecial,
+                                            Icons.Rounded.Storage,
                                             contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
                                         )
                                         Text(
-                                            text = strings.addSafFolder,
-                                            style = MaterialTheme.typography.labelMedium,
+                                            text = strings.storageSpace,
+                                            style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.SemiBold
                                         )
+                                    }
+                                    Text(
+                                        text = strings.storageAvailableOf(
+                                            strings.formatBytes(uiState.storageStats.freeBytes),
+                                            strings.formatBytes(uiState.storageStats.totalBytes)
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                ExpressiveWavyProgressIndicator(
+                                    progress = { animatedStorageFraction },
+                                    animateWhenDeterminate = false,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                items(uiState.storageRoots, key = { it.id }) { root ->
+                                    val isCurrent = uiState.currentPath == root.path
+                                    val rootLabel = when (root.type) {
+                                        StorageRootType.INTERNAL -> strings.rootInternal
+                                        StorageRootType.DOWNLOADS -> strings.rootDownloads
+                                        StorageRootType.DOCUMENTS -> strings.rootDocuments
+                                        StorageRootType.EXTERNAL_USB -> "${strings.rootExternalUsb}: ${root.title}"
+                                        StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
+                                        StorageRootType.SAF_TREE -> root.title
+                                    }
+                                    ExpressiveSurface(
+                                        onClick = { viewModel.navigateToRoot(root) },
+                                        containerColor = if (isCurrent) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainerHigh
+                                        },
+                                        contentColor = if (isCurrent) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        restingCornerRadius = 20.dp,
+                                        pressedCornerRadius = 11.dp
+                                    ) {
+                                        Text(
+                                            text = rootLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
+                                item(key = "android_data_saf_pill") {
+                                    ExpressiveSurface(
+                                        onClick = {
+                                            viewModel.showSnackbar(strings.androidDataHint)
+                                            runCatching {
+                                                safLauncher.launch(FileProTools.buildAndroidSafInitialUri("Android/data"))
+                                            }
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        restingCornerRadius = 20.dp,
+                                        pressedCornerRadius = 11.dp,
+                                        modifier = Modifier.testTag("saf_android_data_button")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(Icons.Rounded.Android, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text("Android/data", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                                item(key = "android_obb_saf_pill") {
+                                    ExpressiveSurface(
+                                        onClick = {
+                                            viewModel.showSnackbar(strings.androidDataHint)
+                                            runCatching {
+                                                safLauncher.launch(FileProTools.buildAndroidSafInitialUri("Android/obb"))
+                                            }
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        restingCornerRadius = 20.dp,
+                                        pressedCornerRadius = 11.dp,
+                                        modifier = Modifier.testTag("saf_android_obb_button")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(Icons.Rounded.Android, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text("Android/obb", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+                                }
+                                item(key = "add_saf_pill") {
+                                    ExpressiveSurface(
+                                        onClick = { runCatching { safLauncher.launch(null) } },
+                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        restingCornerRadius = 20.dp,
+                                        pressedCornerRadius = 11.dp,
+                                        modifier = Modifier.testTag("add_saf_folder_button")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.FolderSpecial,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = strings.addSafFolder,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (prefs.favoriteFolders.isNotEmpty()) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    items(prefs.favoriteFolders, key = { "${it.path}_${it.safUri}" }) { fav ->
+                                        val isCurrentFav = uiState.currentPath == fav.path &&
+                                            uiState.currentSafUri?.toString() == fav.safUri
+                                        ExpressiveSurface(
+                                            onClick = { viewModel.openFavorite(fav) },
+                                            containerColor = if (isCurrentFav) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                            },
+                                            contentColor = if (isCurrentFav) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                            restingCornerRadius = 18.dp,
+                                            pressedCornerRadius = 10.dp
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Rounded.Star,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                                Text(
+                                                    text = fav.title,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -720,59 +932,104 @@ fun FileExplorerScreen(
                                     Text(strings.selectAll)
                                 }
                             }
-                            item {
-                                TextButton(onClick = {
-                                    viewModel.copyToClipboard(uiState.selectedItems, ClipboardAction.COPY)
-                                }) {
-                                    Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(strings.copy)
-                                }
-                            }
-                            item {
-                                TextButton(onClick = {
-                                    viewModel.copyToClipboard(uiState.selectedItems, ClipboardAction.CUT)
-                                }) {
-                                    Icon(Icons.Rounded.ContentCut, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(strings.cut)
-                                }
-                            }
-                            item {
-                                TextButton(onClick = {
-                                    viewModel.requestMoveToFolder(uiState.selectedItems)
-                                }) {
-                                    Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(strings.move)
-                                }
-                            }
-                            item {
-                                TextButton(onClick = { compressTargets = uiState.selectedItems }) {
-                                    Icon(Icons.Rounded.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(strings.compressZip)
-                                }
-                            }
-                            if (uiState.selectedItems.size == 1) {
+                            if (uiState.isInsideArchive) {
                                 item {
-                                    TextButton(onClick = { renameTarget = uiState.selectedItems.first() }) {
-                                        Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    TextButton(onClick = {
+                                        viewModel.requestExtractSelectedFromArchive(uiState.selectedItems)
+                                    }) {
+                                        Icon(Icons.Rounded.Unarchive, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(4.dp))
-                                        Text(strings.rename)
+                                        Text(strings.extractSelected)
                                     }
                                 }
-                            }
-                            item {
-                                TextButton(onClick = { deleteTargets = uiState.selectedItems }) {
-                                    Icon(
-                                        Icons.Rounded.DeleteOutline,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(strings.delete, color = MaterialTheme.colorScheme.error)
+                                if (uiState.archiveBrowse?.isEditableZip == true) {
+                                    if (uiState.selectedItems.size == 1) {
+                                        item {
+                                            TextButton(onClick = { renameTarget = uiState.selectedItems.first() }) {
+                                                Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(strings.rename)
+                                            }
+                                        }
+                                    }
+                                    item {
+                                        TextButton(onClick = { deleteTargets = uiState.selectedItems }) {
+                                            Icon(
+                                                Icons.Rounded.DeleteOutline,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(strings.delete, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                            } else {
+                                item {
+                                    TextButton(onClick = {
+                                        viewModel.copyToClipboard(uiState.selectedItems, ClipboardAction.COPY)
+                                    }) {
+                                        Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(strings.copy)
+                                    }
+                                }
+                                item {
+                                    TextButton(onClick = {
+                                        viewModel.copyToClipboard(uiState.selectedItems, ClipboardAction.CUT)
+                                    }) {
+                                        Icon(Icons.Rounded.ContentCut, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(strings.cut)
+                                    }
+                                }
+                                item {
+                                    TextButton(onClick = {
+                                        viewModel.requestMoveToFolder(uiState.selectedItems)
+                                    }) {
+                                        Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(strings.move)
+                                    }
+                                }
+                                item {
+                                    TextButton(onClick = { compressTargets = uiState.selectedItems }) {
+                                        Icon(Icons.Rounded.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(strings.compressZip)
+                                    }
+                                }
+                                if (uiState.selectedItems.size == 1) {
+                                    item {
+                                        TextButton(onClick = { renameTarget = uiState.selectedItems.first() }) {
+                                            Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(strings.rename)
+                                        }
+                                    }
+                                }
+                                item {
+                                    TextButton(
+                                        onClick = { batchRenameTargets = uiState.selectedItems },
+                                        modifier = Modifier.testTag("batch_rename_action")
+                                    ) {
+                                        Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(strings.batchRename)
+                                    }
+                                }
+                                item {
+                                    TextButton(onClick = { deleteTargets = uiState.selectedItems }) {
+                                        Icon(
+                                            Icons.Rounded.DeleteOutline,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(strings.delete, color = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
                         }
@@ -917,6 +1174,8 @@ fun FileExplorerScreen(
                         item = item,
                         isSelected = item.id in uiState.selectedIds,
                         isCompact = density == ListDensity.COMPACT,
+                        isInsideArchive = uiState.isInsideArchive,
+                        isEditableArchive = uiState.archiveBrowse?.isEditableZip == true,
                         onClick = { viewModel.onItemClick(item) },
                         onLongClick = { viewModel.toggleSelection(item) },
                         onCopy = { viewModel.copyToClipboard(listOf(item), ClipboardAction.COPY) },
@@ -924,11 +1183,18 @@ fun FileExplorerScreen(
                         onMove = { viewModel.requestMoveToFolder(listOf(item)) },
                         onRename = { renameTarget = item },
                         onCompress = { compressTargets = listOf(item) },
-                        onExtract = { viewModel.requestExtractZip(item) },
+                        onExtract = {
+                            if (uiState.isInsideArchive) {
+                                viewModel.requestExtractSelectedFromArchive(listOf(item))
+                            } else {
+                                viewModel.requestExtractZip(item)
+                            }
+                        },
                         onDetails = { viewModel.showDetails(item) },
                         onDelete = { deleteTargets = listOf(item) }
                     )
                 }
+            }
             }
             }
 
@@ -941,23 +1207,24 @@ fun FileExplorerScreen(
         }
 
         // Pure 2D Material 3 Expressive Floating Actions with Scalloped Cookie Main FAB
-        val fabInteractionSource = remember { MutableInteractionSource() }
-        val isFabFocused by fabInteractionSource.collectIsFocusedAsState()
-        val fabFocusScale by animateFloatAsState(
-            targetValue = if (expressive && isFabFocused) 1.09f else 1f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            ),
-            label = "fab_focus_scale"
-        )
+        if (!uiState.isInsideArchive) {
+            val fabInteractionSource = remember { MutableInteractionSource() }
+            val isFabFocused by fabInteractionSource.collectIsFocusedAsState()
+            val fabFocusScale by animateFloatAsState(
+                targetValue = if (expressive && isFabFocused) 1.09f else 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "fab_focus_scale"
+            )
 
-        Column(
-            modifier = Modifier
-                .align(if (useSideRail) Alignment.BottomEnd else Alignment.BottomStart)
-                .windowInsetsPadding(
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
-                )
+            Column(
+                modifier = Modifier
+                    .align(if (useSideRail) Alignment.BottomEnd else Alignment.BottomStart)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+                    )
                 .padding(
                     start = if (useSideRail) 0.dp else 20.dp,
                     end = if (useSideRail) (if (isTvMode) 32.dp else 20.dp) else 0.dp,
@@ -1052,13 +1319,14 @@ fun FileExplorerScreen(
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = strings.createItem,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .graphicsLayer { rotationZ = fabRotation }
-                    )
-                }
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer { rotationZ = fabRotation }
+                )
             }
         }
+    }
+    }
     }
 
     if (showCreateFolderDialog) {
@@ -1092,6 +1360,17 @@ fun FileExplorerScreen(
         )
     }
 
+    batchRenameTargets?.let { targets ->
+        BatchRenameDialog(
+            items = targets,
+            onDismiss = { batchRenameTargets = null },
+            onConfirm = { rule ->
+                batchRenameTargets = null
+                viewModel.batchRenameItems(targets, rule)
+            }
+        )
+    }
+
     deleteTargets?.let { targets ->
         DeleteConfirmDialog(
             count = targets.size,
@@ -1113,9 +1392,9 @@ fun FileExplorerScreen(
         CompressZipDialog(
             suggestedName = suggested,
             onDismiss = { compressTargets = null },
-            onConfirm = { archiveName ->
+            onConfirm = { archiveName, level ->
                 compressTargets = null
-                viewModel.compressItems(targets, archiveName)
+                viewModel.compressItems(targets, archiveName, level)
             }
         )
     }
@@ -1127,6 +1406,8 @@ private fun FileItemRow(
     item: FileItem,
     isSelected: Boolean,
     isCompact: Boolean,
+    isInsideArchive: Boolean,
+    isEditableArchive: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onCopy: () -> Unit,
@@ -1291,70 +1572,105 @@ private fun FileItemRow(
                             onDetails()
                         }
                     )
-                    if (item.category == FileCategory.ARCHIVE) {
+                    if (isInsideArchive) {
                         DropdownMenuItem(
-                            text = { Text(strings.extractArchive) },
+                            text = { Text(strings.extractSelected) },
                             leadingIcon = { Icon(Icons.Rounded.Unarchive, contentDescription = null) },
                             onClick = {
                                 menuExpanded = false
                                 onExtract()
                             }
                         )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(strings.copy) },
-                        leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onCopy()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.cut) },
-                        leadingIcon = { Icon(Icons.Rounded.ContentCut, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onCut()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.moveTo) },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onMove()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.compressZip) },
-                        leadingIcon = { Icon(Icons.Rounded.Archive, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onCompress()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.rename) },
-                        leadingIcon = { Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null) },
-                        onClick = {
-                            menuExpanded = false
-                            onRename()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(strings.delete, color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Rounded.DeleteOutline,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
+                        if (isEditableArchive) {
+                            DropdownMenuItem(
+                                text = { Text(strings.rename) },
+                                leadingIcon = { Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onRename()
+                                }
                             )
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onDelete()
+                            DropdownMenuItem(
+                                text = { Text(strings.delete, color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Rounded.DeleteOutline,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDelete()
+                                }
+                            )
                         }
-                    )
+                    } else {
+                        if (item.category == FileCategory.ARCHIVE) {
+                            DropdownMenuItem(
+                                text = { Text(strings.extractArchive) },
+                                leadingIcon = { Icon(Icons.Rounded.Unarchive, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onExtract()
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(strings.copy) },
+                            leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onCopy()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.cut) },
+                            leadingIcon = { Icon(Icons.Rounded.ContentCut, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onCut()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.moveTo) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onMove()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.compressZip) },
+                            leadingIcon = { Icon(Icons.Rounded.Archive, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onCompress()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.rename) },
+                            leadingIcon = { Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onRename()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.delete, color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Rounded.DeleteOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onDelete()
+                            }
+                        )
+                    }
                 }
             }
         }

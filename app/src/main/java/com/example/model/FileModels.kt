@@ -111,15 +111,84 @@ data class ApkMetadata(
     val fileSizeBytes: Long,
     val icon: ImageBitmap?,
     val fileItem: FileItem,
-    val resolvedLocalPath: String?
+    val resolvedLocalPath: String?,
+    val permissions: List<String> = emptyList(),
+    val sha256: String? = null
 )
 
 data class ArchiveEntryInfo(
     val name: String,
     val sizeBytes: Long,
     val compressedSizeBytes: Long,
-    val isDirectory: Boolean
+    val isDirectory: Boolean,
+    val crc: Long = 0L,
+    val fullEntryPath: String = name
 )
+
+enum class CompressionLevel(val deflaterLevel: Int) {
+    STORE(0),
+    FAST(1),
+    NORMAL(-1),
+    MAXIMUM(9)
+}
+
+data class ArchiveTestResult(
+    val verifiedEntries: Int,
+    val totalUncompressedBytes: Long
+)
+
+data class ArchiveBrowseState(
+    val archiveItem: FileItem,
+    val innerPath: String = "",
+    val allEntries: List<ArchiveEntryInfo> = emptyList()
+) {
+    val isEditableZip: Boolean
+        get() = archiveItem.extension.equals("zip", ignoreCase = true) ||
+            archiveItem.extension.equals("jar", ignoreCase = true)
+}
+
+data class FileHashResult(
+    val md5: String,
+    val sha1: String,
+    val sha256: String
+)
+
+data class FolderStats(
+    val totalBytes: Long,
+    val fileCount: Int,
+    val folderCount: Int
+)
+
+data class BatchRenameRule(
+    val findText: String = "",
+    val replaceText: String = "",
+    val prefix: String = "",
+    val suffix: String = "",
+    val useNumbering: Boolean = false,
+    val startNumber: Int = 1,
+    val changeExtension: Boolean = false,
+    val newExtension: String = ""
+)
+
+data class FavoriteFolder(
+    val title: String,
+    val path: String,
+    val safUri: String? = null
+) {
+    fun encode(): String = "$title\u001F$path\u001F${safUri.orEmpty()}"
+
+    companion object {
+        fun decode(raw: String): FavoriteFolder? {
+            val parts = raw.split('\u001F')
+            if (parts.size < 2) return null
+            val title = parts[0].trim()
+            val path = parts[1].trim()
+            val saf = parts.getOrNull(2)?.takeIf { it.isNotBlank() }
+            if (title.isEmpty() || path.isEmpty()) return null
+            return FavoriteFolder(title = title, path = path, safUri = saf)
+        }
+    }
+}
 
 data class StorageStats(
     val totalBytes: Long,

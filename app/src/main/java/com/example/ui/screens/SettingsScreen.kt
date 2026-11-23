@@ -158,7 +158,7 @@ fun SettingsScreen(
                     modifier = Modifier.wrapContentWidth(unbounded = true)
                 ) {
                     Text(
-                        text = "v1.12",
+                        text = "v1.13",
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontFamily = JetBrainsMonoFontFamily,
                             fontWeight = FontWeight.Bold
@@ -349,6 +349,95 @@ fun SettingsScreen(
                                 Spacer(Modifier.width(6.dp))
                                 Text(strings.creatorOpenHandle, fontWeight = FontWeight.Bold)
                             }
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("tester_credit_row"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        AsyncImage(
+                            model = R.drawable.tester_avatar,
+                            contentDescription = strings.testerBadgeLabel,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 1.5.dp,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    shape = CircleShape
+                                )
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(1.dp)
+                        ) {
+                            Text(
+                                text = strings.testerBadgeLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                Text(
+                                    text = "@${preferences.testerHandle}",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontFamily = JetBrainsMonoFontFamily,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        ExpressiveIconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText("TikTok Handle", "@${preferences.testerHandle}")
+                                )
+                                onShowMessage(strings.creatorCopiedToast(preferences.testerHandle))
+                            },
+                            size = 48.dp,
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.testTag("copy_tester_handle_button")
+                        ) {
+                            Icon(
+                                Icons.Rounded.ContentCopy,
+                                contentDescription = strings.creatorCopyHandle,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        ExpressiveIconButton(
+                            onClick = {
+                                val url = "https://www.tiktok.com/@${preferences.testerHandle}"
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                    )
+                                }.onFailure {
+                                    onShowMessage(strings.creatorOpenFailed)
+                                }
+                            },
+                            size = 48.dp,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.testTag("open_tester_tiktok_button")
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.OpenInNew,
+                                contentDescription = strings.creatorOpenHandle,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }

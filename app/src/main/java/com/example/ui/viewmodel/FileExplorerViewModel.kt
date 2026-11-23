@@ -7,15 +7,20 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.ApkInspector
 import com.example.data.ArchiveManager
+import com.example.data.FileProTools
 import com.example.data.FileRepository
 import com.example.data.PreferencesRepository
 import com.example.localization.AppStrings
 import com.example.localization.stringsForLanguage
 import com.example.model.ApkMetadata
+import com.example.model.ArchiveBrowseState
 import com.example.model.ArchiveEntryInfo
+import com.example.model.BatchRenameRule
 import com.example.model.BreadcrumbSegment
 import com.example.model.ClipboardAction
 import com.example.model.ClipboardState
+import com.example.model.CompressionLevel
+import com.example.model.FavoriteFolder
 import com.example.model.FileCategory
 import com.example.model.FileItem
 import com.example.model.FileOpType
@@ -39,7 +44,7 @@ import java.io.File
 
 sealed interface ActiveViewer {
     data class HtmlEditor(val item: FileItem) : ActiveViewer
-    data class DocumentViewer(val item: FileItem) : ActiveViewer
+    data class DocumentViewer(val item: FileItem, val hostArchive: FileItem? = null) : ActiveViewer
 }
 
 data class FolderPickerRequest(
@@ -54,6 +59,8 @@ data class ExplorerUiState(
     val storageRoots: List<StorageRoot> = emptyList(),
     val currentPath: String = "",
     val currentSafUri: Uri? = null,
+    val archiveBrowse: ArchiveBrowseState? = null,
+    val navDirection: Int = 1,
     val breadcrumbs: List<BreadcrumbSegment> = emptyList(),
     val rawItems: List<FileItem> = emptyList(),
     val displayedItems: List<FileItem> = emptyList(),
@@ -75,13 +82,14 @@ data class ExplorerUiState(
     val snackbarMessage: String? = null
 ) {
     val isSelectionMode: Boolean get() = selectedIds.isNotEmpty()
+    val isInsideArchive: Boolean get() = archiveBrowse != null
     val selectedItems: List<FileItem> get() = rawItems.filter { it.id in selectedIds }
 }
 
 class FileExplorerViewModel(application: Application) : AndroidViewModel(application) {
 
     val fileRepository = FileRepository(application.applicationContext)
-    private val archiveManager = ArchiveManager(application.applicationContext)
+    val archiveManager = ArchiveManager(application.applicationContext)
     val apkInspector = ApkInspector(application.applicationContext)
     private val preferencesRepository = PreferencesRepository(application.applicationContext)
 
@@ -206,40 +214,77 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun navigateToRoot(root: StorageRoot) {
         if (root.safUri != null) {
-            navigateToSafRoot(root.safUri, root.title)
+            navigateToSafRoot(root.safUri, root.title, navDirection = -1)
         } else {
             safNavStack.clear()
-            loadDirectory(root.path, null)
+            loadDirectory(root.path, null, navDirection = -1)
         }
     }
 
-    private fun navigateToSafRoot(uri: Uri, title: String = currentStrings().safFolderFallback) {
+    fun openFavorite(fav: FavoriteFolder) {
+        val safUri = fav.safUri?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        if (safUri != null) {
+            navigateToSafRoot(safUri, fav.title, navDirection = 1)
+        } else {
+            safNavStack.clear()
+            loadDirectory(fav.path, null, navDirection = 1)
+        }
+    }
+
+    fun toggleFavoriteCurrentFolder() {
+        val st = _uiState.value
+        if (st.archiveBrowse != null || st.currentPath.isEmpty()) return
+        val title = st.breadcrumbs.lastOrNull()?.title?.takeIf { it.isNotBlank() }
+            ?: File(st.currentPath).name.ifBlank { currentStrings().rootInternal }
+        val fav = FavoriteFolder(
+            title = title,
+            path = st.currentPath,
+            safUri = st.currentSafUri?.toString()
+        )
+        viewModelScope.launch {
+            val added = preferencesRepository.toggleFavoriteFolder(fav)
+            showSnackbar(if (added) currentStrings().msgFavoriteAdded else currentStrings().msgFavoriteRemoved)
+        }
+    }
+
+    private fun navigateToSafRoot(uri: Uri, title: String = currentStrings().safFolderFallback, navDirection: Int = 1) {
         safNavStack.clear()
         safNavStack += BreadcrumbSegment(title = title, path = uri.toString(), safUri = uri)
-        loadDirectory(uri.toString(), uri)
+        loadDirectory(uri.toString(), uri, navDirection = navDirection)
     }
 
     fun openFolder(item: FileItem) {
         if (!item.isDirectory) return
+        val archive = _uiState.value.archiveBrowse
+        if (archive != null) {
+            navigateArchiveFolder(item.path, navDirection = 1)
+            return
+        }
         if (item.safUri != null) {
             safNavStack += BreadcrumbSegment(title = item.name, path = item.safUri.toString(), safUri = item.safUri)
-            loadDirectory(item.safUri.toString(), item.safUri)
+            loadDirectory(item.safUri.toString(), item.safUri, navDirection = 1)
         } else {
             safNavStack.clear()
-            loadDirectory(item.path, null)
+            loadDirectory(item.path, null, navDirection = 1)
         }
     }
 
     fun navigateToBreadcrumb(segment: BreadcrumbSegment) {
+        val archive = _uiState.value.archiveBrowse
+        if (archive != null && segment.path.startsWith("zipcrumb://")) {
+            val inner = segment.path.removePrefix("zipcrumb://")
+            navigateArchiveFolder(inner, navDirection = -1)
+            return
+        }
         if (segment.safUri != null) {
             val idx = safNavStack.indexOfFirst { it.safUri == segment.safUri }
             if (idx >= 0) {
                 while (safNavStack.size > idx + 1) safNavStack.removeAt(safNavStack.lastIndex)
             }
-            loadDirectory(segment.path, segment.safUri)
+            loadDirectory(segment.path, segment.safUri, navDirection = -1)
         } else {
             safNavStack.clear()
-            loadDirectory(segment.path, null)
+            loadDirectory(segment.path, null, navDirection = -1)
         }
     }
 
@@ -249,15 +294,26 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             clearSelection()
             return true
         }
+        val archive = state.archiveBrowse
+        if (archive != null) {
+            val cleanInner = archive.innerPath.trim('/')
+            if (cleanInner.isNotEmpty()) {
+                val parentInner = if (cleanInner.contains('/')) cleanInner.substringBeforeLast('/') else ""
+                navigateArchiveFolder(parentInner, navDirection = -1)
+            } else {
+                exitArchiveBrowse()
+            }
+            return true
+        }
         if (state.currentSafUri != null) {
             return if (safNavStack.size > 1) {
                 safNavStack.removeAt(safNavStack.lastIndex)
                 val parent = safNavStack.last()
-                loadDirectory(parent.path, parent.safUri)
+                loadDirectory(parent.path, parent.safUri, navDirection = -1)
                 true
             } else {
                 safNavStack.clear()
-                loadDirectory(fileRepository.getInternalRootPath(), null)
+                loadDirectory(fileRepository.getInternalRootPath(), null, navDirection = -1)
                 true
             }
         }
@@ -268,22 +324,103 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             return false
         }
         val parent = currentFile.parentFile ?: return false
-        loadDirectory(parent.absolutePath, null)
+        loadDirectory(parent.absolutePath, null, navDirection = -1)
         return true
+    }
+
+    fun enterArchiveBrowse(archiveItem: FileItem) {
+        dismissZipPreview()
+        dismissApkPreview()
+        viewModelScope.launch(safeExceptionHandler) {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, selectedIds = emptySet()) }
+            archiveManager.inspectZip(archiveItem).fold(
+                onSuccess = { entries ->
+                    val newArchiveState = ArchiveBrowseState(
+                        archiveItem = archiveItem,
+                        innerPath = "",
+                        allEntries = entries
+                    )
+                    applyArchiveBrowseState(newArchiveState, navDirection = 1)
+                },
+                onFailure = { err ->
+                    _uiState.update { it.copy(isLoading = false) }
+                    showSnackbar(err.message ?: currentStrings().errInspectZipFailed)
+                }
+            )
+        }
+    }
+
+    private fun navigateArchiveFolder(innerPath: String, navDirection: Int) {
+        val current = _uiState.value.archiveBrowse ?: return
+        applyArchiveBrowseState(current.copy(innerPath = innerPath.trim('/')), navDirection = navDirection)
+    }
+
+    private fun exitArchiveBrowse() {
+        val state = _uiState.value
+        _uiState.update { it.copy(archiveBrowse = null, navDirection = -1, selectedIds = emptySet()) }
+        loadDirectory(state.currentPath, state.currentSafUri, navDirection = -1)
+    }
+
+    private fun applyArchiveBrowseState(archiveState: ArchiveBrowseState, navDirection: Int) {
+        val prefs = preferences.value
+        val state = _uiState.value
+        val items = ArchiveManager.listArchiveDirectory(
+            entries = archiveState.allEntries,
+            innerPath = archiveState.innerPath,
+            showHidden = prefs.showHiddenFiles,
+            sortOption = state.sortOption
+        )
+        val crumbs = buildArchiveBreadcrumbs(archiveState.archiveItem, archiveState.innerPath)
+        _uiState.update {
+            it.copy(
+                archiveBrowse = archiveState,
+                navDirection = navDirection,
+                breadcrumbs = crumbs,
+                rawItems = items,
+                displayedItems = filterItems(items, it.searchQuery),
+                isLoading = false,
+                errorMessage = null,
+                selectedIds = emptySet()
+            )
+        }
+    }
+
+    private fun buildArchiveBreadcrumbs(archiveItem: FileItem, innerPath: String): List<BreadcrumbSegment> {
+        val list = mutableListOf(BreadcrumbSegment(archiveItem.name, "zipcrumb://"))
+        val clean = innerPath.trim('/')
+        if (clean.isNotEmpty()) {
+            var acc = ""
+            clean.split('/').forEach { seg ->
+                acc = if (acc.isEmpty()) seg else "$acc/$seg"
+                list += BreadcrumbSegment(seg, "zipcrumb://$acc")
+            }
+        }
+        return list
     }
 
     fun refreshCurrentDirectory() {
         val state = _uiState.value
-        loadDirectory(state.currentPath, state.currentSafUri)
+        val archive = state.archiveBrowse
+        if (archive != null) {
+            viewModelScope.launch(safeExceptionHandler) {
+                archiveManager.inspectZip(archive.archiveItem).onSuccess { entries ->
+                    applyArchiveBrowseState(archive.copy(allEntries = entries), navDirection = 0)
+                }
+            }
+            return
+        }
+        loadDirectory(state.currentPath, state.currentSafUri, navDirection = 0)
     }
 
-    fun loadDirectory(path: String, safUri: Uri?) {
+    fun loadDirectory(path: String, safUri: Uri?, navDirection: Int = 1) {
         if (path.isEmpty() && safUri == null) return
         loadDirJob?.cancel()
         childCountJob?.cancel()
         loadDirJob = viewModelScope.launch(safeExceptionHandler) {
             _uiState.update {
                 it.copy(
+                    archiveBrowse = null,
+                    navDirection = navDirection,
                     isLoading = true,
                     errorMessage = null,
                     selectedIds = emptySet()
@@ -440,6 +577,19 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun openFileItem(item: FileItem) {
+        val archive = _uiState.value.archiveBrowse
+        if (archive != null) {
+            val previewableMedia = (item.category == FileCategory.IMAGE || item.category == FileCategory.PDF) &&
+                item.sizeBytes in 1..10_000_000L
+            if (item.category == FileCategory.TEXT || item.category == FileCategory.CODE ||
+                item.category == FileCategory.HTML || previewableMedia || item.sizeBytes in 1..512_000L
+            ) {
+                _uiState.update { it.copy(activeViewer = ActiveViewer.DocumentViewer(item, hostArchive = archive.archiveItem)) }
+            } else {
+                requestExtractSelectedFromArchive(listOf(item))
+            }
+            return
+        }
         when (item.category) {
             FileCategory.APK -> inspectApk(item)
             FileCategory.ARCHIVE -> inspectZip(item)
@@ -449,7 +599,6 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             }
             else -> {
                 fileRepository.openExternally(item).onFailure {
-                    // Fallback to text viewer if small or show message
                     if (item.sizeBytes in 1..2_000_000) {
                         _uiState.update { s -> s.copy(activeViewer = ActiveViewer.DocumentViewer(item)) }
                     } else {
@@ -461,7 +610,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun openAsText(item: FileItem) {
-        _uiState.update { it.copy(activeViewer = ActiveViewer.DocumentViewer(item)) }
+        val host = _uiState.value.archiveBrowse?.archiveItem
+        _uiState.update { it.copy(activeViewer = ActiveViewer.DocumentViewer(item, hostArchive = host)) }
     }
 
     fun openInHtmlEditor(item: FileItem) {
@@ -505,7 +655,22 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun renameItem(item: FileItem, newName: String) {
+        val archive = _uiState.value.archiveBrowse
         val s = currentStrings()
+        if (archive != null) {
+            if (!archive.isEditableZip) return
+            viewModelScope.launch {
+                archiveManager.renameEntryInZip(archive.archiveItem, item, newName).fold(
+                    onSuccess = {
+                        clearSelection()
+                        showSnackbar(s.msgArchiveUpdated)
+                        refreshCurrentDirectory()
+                    },
+                    onFailure = { showSnackbar(it.message ?: s.errRename) }
+                )
+            }
+            return
+        }
         viewModelScope.launch {
             fileRepository.renameItem(item, newName).fold(
                 onSuccess = {
@@ -515,6 +680,33 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 },
                 onFailure = { showSnackbar(it.message ?: s.errRename) }
             )
+        }
+    }
+
+    fun batchRenameItems(items: List<FileItem>, rule: BatchRenameRule) {
+        if (items.isEmpty()) return
+        val s = currentStrings()
+        val plan = FileProTools.buildBatchRenamePlan(items, rule)
+        runOperation {
+            var renamedCount = 0
+            plan.forEachIndexed { idx, (item, newName) ->
+                if (item.name != newName) {
+                    _uiState.update {
+                        it.copy(
+                            operationProgress = FileOperationProgress(
+                                opType = FileOpType.MOVE,
+                                currentFileName = newName,
+                                processedCount = idx + 1,
+                                totalCount = plan.size
+                            )
+                        )
+                    }
+                    fileRepository.renameItem(item, newName).onSuccess { renamedCount++ }
+                }
+            }
+            _uiState.update { it.copy(operationProgress = null, selectedIds = emptySet()) }
+            showSnackbar(s.msgBatchRenamed(renamedCount))
+            refreshCurrentDirectory()
         }
     }
 
@@ -541,6 +733,48 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun pasteClipboardHere() {
         val state = _uiState.value
         val clip = state.clipboard ?: return
+        val archive = state.archiveBrowse
+        if (archive != null) {
+            if (!archive.isEditableZip) {
+                showSnackbar(currentStrings().errOperationFailed)
+                return
+            }
+            val externalItems = clip.items.filter { !it.id.startsWith(ArchiveManager.ARCHIVE_ENTRY_PREFIX) }
+            if (externalItems.isEmpty()) {
+                clearClipboard()
+                return
+            }
+            runOperation {
+                _uiState.update {
+                    it.copy(
+                        operationProgress = FileOperationProgress(
+                            opType = FileOpType.COMPRESS,
+                            currentFileName = externalItems.first().name,
+                            isIndeterminate = true
+                        )
+                    )
+                }
+                archiveManager.addItemsToZip(
+                    zipItem = archive.archiveItem,
+                    sources = externalItems,
+                    targetInnerDir = archive.innerPath
+                ) { progress ->
+                    _uiState.update { it.copy(operationProgress = progress) }
+                }.fold(
+                    onSuccess = {
+                        _uiState.update { it.copy(clipboard = null, operationProgress = null) }
+                        showSnackbar(currentStrings().msgArchiveUpdated)
+                        refreshCurrentDirectory()
+                    },
+                    onFailure = { err ->
+                        _uiState.update { it.copy(operationProgress = null) }
+                        showSnackbar(err.message ?: currentStrings().errCompressFailed)
+                    }
+                )
+            }
+            return
+        }
+
         val isMove = clip.action == ClipboardAction.CUT
         runOperation {
             _uiState.update {
@@ -611,6 +845,29 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun deleteItems(items: List<FileItem>) {
         if (items.isEmpty()) return
+        val archive = _uiState.value.archiveBrowse
+        if (archive != null) {
+            if (!archive.isEditableZip) {
+                showSnackbar(currentStrings().errDeleteFailed)
+                return
+            }
+            runOperation {
+                archiveManager.deleteEntriesFromZip(archive.archiveItem, items) { progress ->
+                    _uiState.update { it.copy(operationProgress = progress) }
+                }.fold(
+                    onSuccess = {
+                        _uiState.update { it.copy(operationProgress = null, selectedIds = emptySet()) }
+                        showSnackbar(currentStrings().msgArchiveUpdated)
+                        refreshCurrentDirectory()
+                    },
+                    onFailure = { err ->
+                        _uiState.update { it.copy(operationProgress = null) }
+                        showSnackbar(err.message ?: currentStrings().errDeleteFailed)
+                    }
+                )
+            }
+            return
+        }
         runOperation {
             fileRepository.deleteItems(items) { progress ->
                 _uiState.update { it.copy(operationProgress = progress) }
@@ -628,7 +885,11 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun compressItems(items: List<FileItem>, archiveName: String) {
+    fun compressItems(
+        items: List<FileItem>,
+        archiveName: String,
+        level: CompressionLevel = CompressionLevel.NORMAL
+    ) {
         if (items.isEmpty()) return
         val state = _uiState.value
         runOperation {
@@ -636,7 +897,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 sources = items,
                 destDirPath = state.currentPath,
                 destSafUri = state.currentSafUri,
-                archiveName = archiveName
+                archiveName = archiveName,
+                level = level
             ) { progress ->
                 _uiState.update { it.copy(operationProgress = progress) }
             }.fold(
@@ -649,6 +911,60 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                     _uiState.update { it.copy(operationProgress = null) }
                     showSnackbar(err.message ?: currentStrings().errCompressFailed)
                 }
+            )
+        }
+    }
+
+    fun testArchiveIntegrity(zipItem: FileItem) {
+        dismissZipPreview()
+        runOperation {
+            archiveManager.testArchiveIntegrity(zipItem) { progress ->
+                _uiState.update { it.copy(operationProgress = progress) }
+            }.fold(
+                onSuccess = { res ->
+                    _uiState.update { it.copy(operationProgress = null) }
+                    showSnackbar(currentStrings().msgArchiveVerified(res.verifiedEntries))
+                },
+                onFailure = { err ->
+                    _uiState.update { it.copy(operationProgress = null) }
+                    showSnackbar(err.message ?: currentStrings().errInspectZipFailed)
+                }
+            )
+        }
+    }
+
+    fun requestExtractSelectedFromArchive(selectedVirtualItems: List<FileItem>) {
+        val archiveItem = _uiState.value.archiveBrowse?.archiveItem ?: return
+        if (selectedVirtualItems.isEmpty()) return
+        val s = currentStrings()
+        _uiState.update {
+            it.copy(
+                folderPicker = FolderPickerRequest(
+                    title = s.chooseExtractFolder,
+                    confirmLabel = s.extractHere,
+                    onConfirm = { destPath, destSafUri ->
+                        _uiState.update { st -> st.copy(folderPicker = null, selectedIds = emptySet()) }
+                        runOperation {
+                            archiveManager.extractEntries(
+                                zipItem = archiveItem,
+                                selectedVirtualItems = selectedVirtualItems,
+                                destDirPath = destPath,
+                                destSafUri = destSafUri
+                            ) { progress ->
+                                _uiState.update { st -> st.copy(operationProgress = progress) }
+                            }.fold(
+                                onSuccess = {
+                                    _uiState.update { st -> st.copy(operationProgress = null) }
+                                    showSnackbar(currentStrings().msgExtractedSuccess)
+                                },
+                                onFailure = { err ->
+                                    _uiState.update { st -> st.copy(operationProgress = null) }
+                                    showSnackbar(err.message ?: currentStrings().errExtractFailed)
+                                }
+                            )
+                        }
+                    }
+                )
             )
         }
     }

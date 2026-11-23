@@ -46,5 +46,7 @@ data class UserPreferences(
     val scannerConfirmBatchDelete: Boolean = true,
     val defaultSortOption: SortOption = SortOption.NAME_ASC,
     val safTreeUris: List<String> = emptyList(),
-    val creatorHandle: String = "ak.v911"
+    val favoriteFolders: List<FavoriteFolder> = emptyList(),
+    val creatorHandle: String = "ak.v911",
+    val testerHandle: String = "amged_203"
 )

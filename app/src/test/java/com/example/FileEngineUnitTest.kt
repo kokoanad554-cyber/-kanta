@@ -1,10 +1,16 @@
 package com.example
 
+import com.example.data.ArchiveManager
+import com.example.data.FileProTools
 import com.example.data.FileRepository
 import com.example.data.FileScanner
 import com.example.localization.stringsForLanguage
 import com.example.model.AppColorPalette
 import com.example.model.AppLanguage
+import com.example.model.ArchiveEntryInfo
+import com.example.model.BatchRenameRule
+import com.example.model.CompressionLevel
+import com.example.model.FavoriteFolder
 import com.example.model.FileCategory
 import com.example.model.FileItem
 import com.example.model.FileOpType
@@ -110,7 +116,15 @@ class FileEngineUnitTest {
                 s.createFileTitle,
                 s.renameTitle,
                 s.confirmDeleteTitle,
-                s.rootExternalUsb
+                s.rootExternalUsb,
+                s.testerBadgeLabel,
+                s.browseAsFolder,
+                s.testArchive,
+                s.batchRename,
+                s.calculateHashes,
+                s.favoriteAdd,
+                s.openCodeEditor,
+                s.extractSelected
             )
             coreStrings.forEach { text ->
                 assertTrue("Empty string in $lang", text.isNotBlank())
@@ -122,6 +136,7 @@ class FileEngineUnitTest {
             ScanScope.entries.forEach { assertTrue(s.scopeLabel(it).isNotBlank()) }
             AppColorPalette.entries.forEach { assertTrue(s.paletteLabel(it).isNotBlank()) }
             FontScaleOption.entries.forEach { assertTrue(s.fontScaleLabel(it).isNotBlank()) }
+            CompressionLevel.entries.forEach { assertTrue(s.compressionLabel(it).isNotBlank()) }
             assertTrue(StorageRootType.entries.contains(StorageRootType.EXTERNAL_USB))
         }
 
@@ -139,9 +154,10 @@ class FileEngineUnitTest {
     }
 
     @Test
-    fun `default user preferences use ak_v911 creator handle and expressive 2D defaults`() {
+    fun `default user preferences use ak_v911 creator handle, amged_203 tester, and expressive 2D defaults`() {
         val defaults = UserPreferences()
         assertEquals("ak.v911", defaults.creatorHandle)
+        assertEquals("amged_203", defaults.testerHandle)
         assertEquals(AppLanguage.ARABIC, defaults.language)
         assertEquals(ListDensity.COMFORTABLE, defaults.listDensity)
         assertTrue(defaults.expressiveAnimations)
@@ -244,5 +260,73 @@ class FileEngineUnitTest {
         } finally {
             sandbox.deleteRecursively()
         }
+    }
+
+    @Test
+    fun `batch rename planner produces conflict-free sequential and extension renames`() {
+        val items = listOf(
+            FileItem("1", "photo A.jpg", "/photo A.jpg", false, 100, 0, false, true, true, "jpg", FileCategory.IMAGE),
+            FileItem("2", "photo B.jpg", "/photo B.jpg", false, 100, 0, false, true, true, "jpg", FileCategory.IMAGE),
+            FileItem("3", "photo B.png", "/photo B.png", false, 100, 0, false, true, true, "png", FileCategory.IMAGE)
+        )
+        val rule = BatchRenameRule(
+            findText = "photo",
+            replaceText = "img",
+            prefix = "v_",
+            useNumbering = true,
+            startNumber = 1,
+            changeExtension = true,
+            newExtension = "webp"
+        )
+        val plan = FileProTools.buildBatchRenamePlan(items, rule)
+        assertEquals(3, plan.size)
+        assertEquals("v_img A_01.webp", plan[0].second)
+        assertEquals("v_img B_02.webp", plan[1].second)
+        assertEquals("v_img B_03.webp", plan[2].second)
+    }
+
+    @Test
+    fun `hash calculator and folder analyzer compute exact digests and recursive sizes`() = runTest {
+        val sandbox = Files.createTempDirectory("kanta_pro_tools").toFile()
+        try {
+            val nested = File(sandbox, "sub").apply { mkdirs() }
+            val f1 = File(sandbox, "hello.txt").apply { writeText("abc") }
+            File(nested, "data.bin").writeBytes(ByteArray(128))
+
+            val hashes = FileProTools.calculateHashesFromFile(f1).getOrThrow()
+            assertEquals("900150983cd24fb0d6963f7d28e17f72", hashes.md5)
+            assertEquals("a9993e364706816aba3e25717850c26c9cd0d89d", hashes.sha1)
+            assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", hashes.sha256)
+
+            val stats = FileProTools.calculateLocalFolderStats(sandbox)
+            assertEquals(131L, stats.totalBytes)
+            assertEquals(2, stats.fileCount)
+            assertEquals(1, stats.folderCount)
+        } finally {
+            sandbox.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `virtual archive listing groups folders and sorts entries cleanly`() {
+        val entries = listOf(
+            ArchiveEntryInfo("assets/logo.png", 400, 200, false, 1L, "assets/logo.png"),
+            ArchiveEntryInfo("assets/fonts/mono.ttf", 800, 300, false, 2L, "assets/fonts/mono.ttf"),
+            ArchiveEntryInfo("AndroidManifest.xml", 1200, 500, false, 3L, "AndroidManifest.xml")
+        )
+        val rootItems = ArchiveManager.listArchiveDirectory(entries, "", false, SortOption.NAME_ASC)
+        assertEquals(2, rootItems.size)
+        assertTrue(rootItems[0].isDirectory)
+        assertEquals("assets", rootItems[0].name)
+        assertEquals("AndroidManifest.xml", rootItems[1].name)
+
+        val assetsItems = ArchiveManager.listArchiveDirectory(entries, "assets", false, SortOption.NAME_ASC)
+        assertEquals(2, assetsItems.size)
+        assertTrue(assetsItems[0].isDirectory)
+        assertEquals("fonts", assetsItems[0].name)
+        assertEquals("logo.png", assetsItems[1].name)
+
+        val fav = FavoriteFolder("Downloads", "/storage/emulated/0/Download", null)
+        assertEquals(fav, FavoriteFolder.decode(fav.encode()))
     }
 }

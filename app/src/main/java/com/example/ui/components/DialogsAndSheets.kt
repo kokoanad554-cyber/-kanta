@@ -1,6 +1,10 @@
 package com.example.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -22,26 +26,35 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.Archive
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Html
 import androidx.compose.material.icons.rounded.InstallMobile
 import androidx.compose.material.icons.rounded.Unarchive
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -69,16 +82,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.ArchiveManager
+import com.example.data.FileProTools
 import com.example.data.FileRepository
 import com.example.localization.LocalAppStrings
 import com.example.model.ApkMetadata
 import com.example.model.ArchiveEntryInfo
+import com.example.model.CompressionLevel
+import com.example.model.FileCategory
+import com.example.model.FileHashResult
 import com.example.model.FileItem
 import com.example.model.FileOperationProgress
+import com.example.model.FolderStats
 import com.example.model.SortOption
 import com.example.model.StorageRoot
 import com.example.model.StorageRootType
@@ -278,14 +298,16 @@ fun DeleteConfirmDialog(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CompressZipDialog(
     suggestedName: String,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (String, CompressionLevel) -> Unit
 ) {
     val strings = LocalAppStrings.current
     var name by remember(suggestedName) { mutableStateOf(suggestedName) }
+    var level by remember { mutableStateOf(CompressionLevel.NORMAL) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -293,18 +315,55 @@ fun CompressZipDialog(
         icon = { Icon(Icons.Rounded.Archive, contentDescription = null) },
         title = { Text(strings.compressDialogTitle) },
         text = {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text(strings.archiveNameLabel) },
-                suffix = { Text(".zip") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(strings.archiveNameLabel) },
+                    suffix = { Text(".zip") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = strings.compressionLevelLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    CompressionLevel.entries.forEach { option ->
+                        val selected = level == option
+                        ExpressiveSurface(
+                            onClick = { level = option },
+                            containerColor = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainer
+                            },
+                            contentColor = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            restingCornerRadius = 16.dp,
+                            pressedCornerRadius = 9.dp
+                        ) {
+                            Text(
+                                text = strings.compressionLabel(option),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
         },
         confirmButton = {
             Button(
-                onClick = { if (name.isNotBlank()) onConfirm(name) },
+                onClick = { if (name.isNotBlank()) onConfirm(name, level) },
                 enabled = name.isNotBlank()
             ) {
                 Text(strings.startCompress)
@@ -391,6 +450,22 @@ fun FileDetailsSheet(
     onOpenExternal: (FileItem) -> Unit
 ) {
     val strings = LocalAppStrings.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val isVirtualArchiveEntry = remember(item.id) { item.id.startsWith(ArchiveManager.ARCHIVE_ENTRY_PREFIX) }
+
+    var folderStats by remember(item.id) { mutableStateOf<FolderStats?>(null) }
+    var isCalculatingStats by remember(item.id) { mutableStateOf(false) }
+
+    var hashResult by remember(item.id) { mutableStateOf<FileHashResult?>(null) }
+    var isCalculatingHashes by remember(item.id) { mutableStateOf(false) }
+    var verifyHashInput by remember(item.id) { mutableStateOf("") }
+
+    fun copyHash(label: String, value: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -400,6 +475,7 @@ fun FileDetailsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 12.dp)
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -443,6 +519,121 @@ fun FileDetailsSheet(
             )
             DetailRow(strings.statusLabel, if (item.isHidden) strings.hiddenFile else strings.visibleFile)
 
+            // Folder Size Analyzer (for real directories)
+            if (item.isDirectory && !isVirtualArchiveEntry) {
+                if (folderStats != null) {
+                    val stats = folderStats!!
+                    DetailRow(
+                        label = strings.calculateFolderSize,
+                        value = "${strings.formatBytes(stats.totalBytes)} • ${strings.folderSummaryStats(stats.fileCount, stats.folderCount)}",
+                        mono = true
+                    )
+                } else if (isCalculatingStats) {
+                    ExpressiveWavyProgressIndicator(
+                        progress = null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            isCalculatingStats = true
+                            scope.launch {
+                                FileProTools.calculateFolderStats(context, item).onSuccess {
+                                    folderStats = it
+                                }
+                                isCalculatingStats = false
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("analyze_folder_size_button")
+                    ) {
+                        Icon(Icons.Rounded.Analytics, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.calculateFolderSize)
+                    }
+                }
+            }
+
+            // Hash / Checksum Calculator + Verifier (for real files)
+            if (!item.isDirectory && !isVirtualArchiveEntry) {
+                if (hashResult == null && !isCalculatingHashes) {
+                    OutlinedButton(
+                        onClick = {
+                            isCalculatingHashes = true
+                            scope.launch {
+                                FileProTools.calculateHashes(context, item).onSuccess {
+                                    hashResult = it
+                                }
+                                isCalculatingHashes = false
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .testTag("calculate_hashes_button")
+                    ) {
+                        Icon(Icons.Rounded.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.calculateHashes)
+                    }
+                } else if (isCalculatingHashes) {
+                    ExpressiveWavyProgressIndicator(
+                        progress = null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else if (hashResult != null) {
+                    val h = hashResult!!
+                    HashRow(label = "MD5", hash = h.md5, onCopy = { copyHash("MD5", h.md5) })
+                    HashRow(label = "SHA-1", hash = h.sha1, onCopy = { copyHash("SHA-1", h.sha1) })
+                    HashRow(label = "SHA-256", hash = h.sha256, onCopy = { copyHash("SHA-256", h.sha256) })
+
+                    OutlinedTextField(
+                        value = verifyHashInput,
+                        onValueChange = { verifyHashInput = it },
+                        label = { Text(strings.verifyHashHint) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    val trimmedVerify = verifyHashInput.trim().lowercase()
+                    if (trimmedVerify.isNotEmpty()) {
+                        val matched = trimmedVerify == h.md5.lowercase() ||
+                            trimmedVerify == h.sha1.lowercase() ||
+                            trimmedVerify == h.sha256.lowercase()
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (matched) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.errorContainer
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (matched) Icons.Rounded.CheckCircle else Icons.Rounded.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = if (matched) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = if (matched) strings.hashMatched else strings.hashMismatch,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (matched) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             if (!item.isDirectory) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(
@@ -454,48 +645,103 @@ fun FileDetailsSheet(
                             onDismiss()
                             onOpenAsText(item)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 48.dp)
                     ) {
                         Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(strings.openAsText)
+                        Text(strings.openAsText, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    OutlinedButton(
+                    if (!isVirtualArchiveEntry) {
+                        val isHtml = item.category == FileCategory.HTML
+                        OutlinedButton(
+                            onClick = {
+                                onDismiss()
+                                onOpenInHtmlEditor(item)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                        ) {
+                            Icon(
+                                if (isHtml) Icons.Rounded.Html else Icons.Rounded.Code,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (isHtml) strings.htmlEditor else strings.openCodeEditor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                if (!isVirtualArchiveEntry) {
+                    ExpressiveSurface(
                         onClick = {
                             onDismiss()
-                            onOpenInHtmlEditor(item)
+                            onOpenExternal(item)
                         },
-                        modifier = Modifier.weight(1f)
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        restingCornerRadius = 24.dp,
+                        pressedCornerRadius = 12.dp,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Rounded.Html, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(strings.htmlEditor)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 50.dp)
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(strings.openExternal, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
-                ExpressiveSurface(
-                    onClick = {
-                        onDismiss()
-                        onOpenExternal(item)
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    restingCornerRadius = 24.dp,
-                    pressedCornerRadius = 12.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 50.dp)
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(strings.openExternal, fontWeight = FontWeight.Bold)
-                    }
-                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HashRow(
+    label: String,
+    hash: String,
+    onCopy: () -> Unit
+) {
+    val strings = LocalAppStrings.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = hash,
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            IconButton(onClick = onCopy) {
+                Icon(Icons.Rounded.ContentCopy, contentDescription = strings.copy, modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -531,12 +777,13 @@ private fun DetailRow(label: String, value: String, mono: Boolean = false) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ApkPreviewSheet(
     metadata: ApkMetadata?,
     isLoading: Boolean,
     onDismiss: () -> Unit,
+    onBrowseContents: (FileItem) -> Unit,
     onInstall: (ApkMetadata) -> Unit
 ) {
     val strings = LocalAppStrings.current
@@ -549,6 +796,7 @@ fun ApkPreviewSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 12.dp)
                 .padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -653,6 +901,73 @@ fun ApkPreviewSheet(
                     }
                 }
 
+                metadata.sha256?.let { sha ->
+                    DetailRow(label = "SHA-256", value = sha, mono = true)
+                }
+
+                if (metadata.permissions.isNotEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainer
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "${strings.apkPermissionsLabel} (${metadata.permissions.size})",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                metadata.permissions.take(24).forEach { perm ->
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        Text(
+                                            text = perm.substringAfterLast('.'),
+                                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                                if (metadata.permissions.size > 24) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer
+                                    ) {
+                                        Text(
+                                            text = "+${metadata.permissions.size - 24}",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = { onBrowseContents(metadata.fileItem) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .testTag("apk_browse_contents_button")
+                ) {
+                    Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(strings.browseAsFolder, fontWeight = FontWeight.SemiBold)
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -729,6 +1044,8 @@ fun ZipPreviewSheet(
     entries: List<ArchiveEntryInfo>,
     isLoading: Boolean,
     onDismiss: () -> Unit,
+    onBrowseContents: (FileItem) -> Unit,
+    onTestIntegrity: (FileItem) -> Unit,
     onExtractClick: (FileItem) -> Unit
 ) {
     val strings = LocalAppStrings.current
@@ -765,6 +1082,34 @@ fun ZipPreviewSheet(
                 }
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onBrowseContents(zipItem) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .testTag("zip_browse_contents_button")
+                ) {
+                    Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(strings.browseAsFolder, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                OutlinedButton(
+                    onClick = { onTestIntegrity(zipItem) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
+                        .testTag("zip_test_integrity_button")
+                ) {
+                    Icon(Icons.Rounded.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(strings.testArchive, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+
             if (isLoading) {
                 Box(
                     modifier = Modifier
@@ -783,7 +1128,7 @@ fun ZipPreviewSheet(
                     color = MaterialTheme.colorScheme.surfaceContainer,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 280.dp)
+                        .heightIn(max = 260.dp)
                 ) {
                     if (entries.isEmpty()) {
                         Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {

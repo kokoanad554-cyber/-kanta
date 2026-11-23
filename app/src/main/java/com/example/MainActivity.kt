@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -161,25 +165,48 @@ fun KantaFilesRootApp(
                                     .weight(1f)
                                     .fillMaxHeight()
                             ) {
+                                val layoutDir = LocalLayoutDirection.current
+                                val dirSign = if (layoutDir == LayoutDirection.Rtl) -1 else 1
                                 NavHost(
                                     navController = navController,
                                     startDestination = AppDestination.FILES.route,
                                     enterTransition = {
+                                        val fromIdx = routeIndex(initialState.destination.route)
+                                        val toIdx = routeIndex(targetState.destination.route)
+                                        val slideSign = if (toIdx >= fromIdx) dirSign else -dirSign
                                         if (prefs.expressiveAnimations) {
-                                            fadeIn(tween(180)) +
-                                                scaleIn(
-                                                    initialScale = 0.96f,
-                                                    animationSpec = spring(
-                                                        dampingRatio = Spring.DampingRatioLowBouncy,
-                                                        stiffness = Spring.StiffnessMedium
-                                                    )
+                                            slideInHorizontally(
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                                    stiffness = Spring.StiffnessMediumLow
+                                                ),
+                                                initialOffsetX = { width -> (width * 0.22f * slideSign).toInt() }
+                                            ) + scaleIn(
+                                                initialScale = 0.94f,
+                                                animationSpec = spring(
+                                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                                    stiffness = Spring.StiffnessMedium
                                                 )
+                                            ) + fadeIn(tween(220))
                                         } else {
                                             fadeIn(tween(120))
                                         }
                                     },
                                     exitTransition = {
-                                        fadeOut(tween(130))
+                                        val fromIdx = routeIndex(initialState.destination.route)
+                                        val toIdx = routeIndex(targetState.destination.route)
+                                        val slideSign = if (toIdx >= fromIdx) dirSign else -dirSign
+                                        if (prefs.expressiveAnimations) {
+                                            slideOutHorizontally(
+                                                animationSpec = tween(200),
+                                                targetOffsetX = { width -> (-width * 0.16f * slideSign).toInt() }
+                                            ) + scaleOut(
+                                                targetScale = 0.96f,
+                                                animationSpec = tween(200)
+                                            ) + fadeOut(tween(160))
+                                        } else {
+                                            fadeOut(tween(110))
+                                        }
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 ) {
@@ -257,6 +284,8 @@ fun KantaFilesRootApp(
                             item = viewer.item,
                             fileRepository = explorerViewModel.fileRepository,
                             fontScale = prefs.fontScale.scale,
+                            hostArchive = viewer.hostArchive,
+                            archiveManager = explorerViewModel.archiveManager,
                             onClose = { explorerViewModel.closeActiveViewer() },
                             onShowMessage = { explorerViewModel.showSnackbar(it) }
                         )
@@ -278,6 +307,7 @@ fun KantaFilesRootApp(
                     metadata = explorerState.apkPreview,
                     isLoading = explorerState.isApkLoading,
                     onDismiss = { explorerViewModel.dismissApkPreview() },
+                    onBrowseContents = { explorerViewModel.enterArchiveBrowse(it) },
                     onInstall = { meta -> explorerViewModel.installApk(meta) }
                 )
             }
@@ -288,6 +318,8 @@ fun KantaFilesRootApp(
                     entries = explorerState.zipPreviewEntries,
                     isLoading = explorerState.isZipLoading,
                     onDismiss = { explorerViewModel.dismissZipPreview() },
+                    onBrowseContents = { explorerViewModel.enterArchiveBrowse(it) },
+                    onTestIntegrity = { explorerViewModel.testArchiveIntegrity(it) },
                     onExtractClick = { explorerViewModel.requestExtractZip(it) }
                 )
             }
@@ -324,3 +356,6 @@ fun KantaFilesRootApp(
         }
     }
 }
+
+private fun routeIndex(route: String?): Int =
+    AppDestination.entries.indexOfFirst { it.route == route }.takeIf { it >= 0 } ?: 0

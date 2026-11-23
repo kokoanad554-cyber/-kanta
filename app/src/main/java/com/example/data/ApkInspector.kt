@@ -40,14 +40,15 @@ class ApkInspector(private val context: Context) {
             }
 
             val pm = context.packageManager
+            val flagsMask = PackageManager.GET_META_DATA or PackageManager.GET_PERMISSIONS
             val pkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 pm.getPackageArchiveInfo(
                     localFile.absolutePath,
-                    PackageManager.PackageInfoFlags.of(PackageManager.GET_META_DATA.toLong())
+                    PackageManager.PackageInfoFlags.of(flagsMask.toLong())
                 )
             } else {
                 @Suppress("DEPRECATION")
-                pm.getPackageArchiveInfo(localFile.absolutePath, PackageManager.GET_META_DATA)
+                pm.getPackageArchiveInfo(localFile.absolutePath, flagsMask)
             } ?: throw IllegalStateException("ملف APK تالف أو غير صالح")
 
             val appInfo = pkgInfo.applicationInfo
@@ -64,10 +65,16 @@ class ApkInspector(private val context: Context) {
                 appInfo?.minSdkVersion?.takeIf { it > 0 }
             } else null
             val targetSdk = appInfo?.targetSdkVersion?.takeIf { it > 0 }
+            val perms = pkgInfo.requestedPermissions
+                ?.map { it.substringAfterLast('.') }
+                ?.distinct()
+                ?.sorted()
+                ?: emptyList()
+            val sha256 = FileProTools.calculateHashesFromFile(localFile).getOrNull()?.sha256
 
             ApkMetadata(
                 appName = appName,
-                packageName = pkgInfo.packageName ?: "غير معروف",
+                packageName = pkgInfo.packageName,
                 versionName = pkgInfo.versionName ?: "1.0",
                 versionCode = PackageInfoCompat.getLongVersionCode(pkgInfo),
                 minSdk = minSdk,
@@ -75,7 +82,9 @@ class ApkInspector(private val context: Context) {
                 fileSizeBytes = item.sizeBytes.takeIf { it > 0L } ?: localFile.length(),
                 icon = iconBitmap,
                 fileItem = item,
-                resolvedLocalPath = localFile.absolutePath
+                resolvedLocalPath = localFile.absolutePath,
+                permissions = perms,
+                sha256 = sha256
             )
         }
     }

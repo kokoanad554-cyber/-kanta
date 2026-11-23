@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.model.AppColorPalette
 import com.example.model.AppLanguage
+import com.example.model.FavoriteFolder
 import com.example.model.FontScaleOption
 import com.example.model.ListDensity
 import com.example.model.SortOption
@@ -40,6 +41,7 @@ class PreferencesRepository(private val context: Context) {
         val SCANNER_CONFIRM_DELETE = booleanPreferencesKey("scanner_confirm_delete")
         val DEFAULT_SORT = stringPreferencesKey("default_sort")
         val SAF_TREE_URIS = stringSetPreferencesKey("saf_tree_uris")
+        val FAVORITE_FOLDERS = stringSetPreferencesKey("favorite_folders")
         val CREATOR_HANDLE = stringPreferencesKey("creator_handle")
     }
 
@@ -78,6 +80,10 @@ class PreferencesRepository(private val context: Context) {
             defaultSortOption = prefs[Keys.DEFAULT_SORT]?.let { runCatching { SortOption.valueOf(it) }.getOrNull() }
                 ?: SortOption.NAME_ASC,
             safTreeUris = prefs[Keys.SAF_TREE_URIS]?.toList()?.sorted() ?: emptyList(),
+            favoriteFolders = prefs[Keys.FAVORITE_FOLDERS]
+                ?.mapNotNull { FavoriteFolder.decode(it) }
+                ?.sortedBy { it.title.lowercase() }
+                ?: emptyList(),
             creatorHandle = resolvedHandle
         )
     }
@@ -151,5 +157,25 @@ class PreferencesRepository(private val context: Context) {
     suspend fun setCreatorHandle(handle: String) {
         val cleaned = handle.trim().removePrefix("@").ifBlank { "ak.v911" }
         context.dataStore.edit { it[Keys.CREATOR_HANDLE] = cleaned }
+    }
+
+    suspend fun toggleFavoriteFolder(folder: FavoriteFolder): Boolean {
+        var added = false
+        context.dataStore.edit { prefs ->
+            val current = prefs[Keys.FAVORITE_FOLDERS]?.toMutableSet() ?: mutableSetOf()
+            val existing = current.firstOrNull { raw ->
+                val decoded = FavoriteFolder.decode(raw)
+                decoded != null && decoded.path == folder.path
+            }
+            if (existing != null) {
+                current.remove(existing)
+                added = false
+            } else {
+                current.add(folder.encode())
+                added = true
+            }
+            prefs[Keys.FAVORITE_FOLDERS] = current
+        }
+        return added
     }
 }

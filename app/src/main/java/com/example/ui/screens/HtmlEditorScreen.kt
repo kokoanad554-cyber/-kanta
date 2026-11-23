@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.FileRepository
 import com.example.localization.LocalAppStrings
+import com.example.model.FileCategory
 import com.example.model.FileItem
 import com.example.ui.components.ExpressiveIconButton
 import com.example.ui.components.ExpressiveWavyProgressIndicator
@@ -99,6 +100,13 @@ fun HtmlEditorScreen(
     var replaceQuery by remember { mutableStateOf("") }
     var activeMatchIndex by remember { mutableIntStateOf(0) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
+
+    val isHtmlFile = remember(item) {
+        item.category == FileCategory.HTML ||
+            item.extension.equals("html", ignoreCase = true) ||
+            item.extension.equals("htm", ignoreCase = true) ||
+            item.extension.equals("xhtml", ignoreCase = true)
+    }
 
     val hasUnsavedChanges = codeValue.text != originalContent
 
@@ -224,7 +232,8 @@ fun HtmlEditorScreen(
                                 text = when {
                                     isPreviewMode -> strings.htmlLivePreviewMode
                                     hasUnsavedChanges -> strings.htmlUnsavedChanges
-                                    else -> strings.htmlEditorMode
+                                    isHtmlFile -> strings.htmlEditorMode
+                                    else -> strings.openCodeEditor
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (hasUnsavedChanges) {
@@ -259,26 +268,28 @@ fun HtmlEditorScreen(
                                 Icon(Icons.Rounded.Search, contentDescription = strings.search, modifier = Modifier.size(22.dp))
                             }
                         }
-                        ExpressiveIconButton(
-                            onClick = { isPreviewMode = !isPreviewMode },
-                            containerColor = if (isPreviewMode) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            },
-                            contentColor = if (isPreviewMode) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            size = 48.dp,
-                            modifier = Modifier.testTag("html_editor_preview_toggle")
-                        ) {
-                            Icon(
-                                imageVector = if (isPreviewMode) Icons.Rounded.Code else Icons.Rounded.Visibility,
-                                contentDescription = strings.htmlLivePreviewMode,
-                                modifier = Modifier.size(22.dp)
-                            )
+                        if (isHtmlFile) {
+                            ExpressiveIconButton(
+                                onClick = { isPreviewMode = !isPreviewMode },
+                                containerColor = if (isPreviewMode) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                },
+                                contentColor = if (isPreviewMode) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                size = 48.dp,
+                                modifier = Modifier.testTag("html_editor_preview_toggle")
+                            ) {
+                                Icon(
+                                    imageVector = if (isPreviewMode) Icons.Rounded.Code else Icons.Rounded.Visibility,
+                                    contentDescription = strings.htmlLivePreviewMode,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                         ExpressiveIconButton(
                             onClick = { saveDocument() },

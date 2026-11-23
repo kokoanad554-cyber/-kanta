@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.ArchiveManager
 import com.example.data.FileRepository
 import com.example.localization.LocalAppStrings
 import com.example.model.FileCategory
@@ -94,6 +95,8 @@ fun DocumentViewerScreen(
     item: FileItem,
     fileRepository: FileRepository,
     fontScale: Float,
+    hostArchive: FileItem? = null,
+    archiveManager: ArchiveManager? = null,
     onClose: () -> Unit,
     onShowMessage: (String) -> Unit
 ) {
@@ -119,17 +122,23 @@ fun DocumentViewerScreen(
                 FileCategory.PDF -> PdfDocumentView(
                     item = item,
                     fileRepository = fileRepository,
+                    hostArchive = hostArchive,
+                    archiveManager = archiveManager,
                     onClose = onClose,
                     onShowMessage = onShowMessage
                 )
                 FileCategory.IMAGE -> ImageDocumentView(
                     item = item,
                     fileRepository = fileRepository,
+                    hostArchive = hostArchive,
+                    archiveManager = archiveManager,
                     onClose = onClose
                 )
                 else -> TextDocumentView(
                     item = item,
                     fileRepository = fileRepository,
+                    hostArchive = hostArchive,
+                    archiveManager = archiveManager,
                     fontScale = fontScale,
                     context = context,
                     onClose = onClose,
@@ -144,6 +153,8 @@ fun DocumentViewerScreen(
 private fun ColumnScope.TextDocumentView(
     item: FileItem,
     fileRepository: FileRepository,
+    hostArchive: FileItem?,
+    archiveManager: ArchiveManager?,
     fontScale: Float,
     context: Context,
     onClose: () -> Unit,
@@ -160,9 +171,14 @@ private fun ColumnScope.TextDocumentView(
     var showSearch by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
-    LaunchedEffect(item.id) {
+    LaunchedEffect(item.id, hostArchive?.id) {
         isLoading = true
-        fileRepository.readTextDocument(item).fold(
+        val res = if (hostArchive != null && archiveManager != null) {
+            archiveManager.readArchiveEntryText(hostArchive, item.path)
+        } else {
+            fileRepository.readTextDocument(item)
+        }
+        res.fold(
             onSuccess = { (content, truncated) ->
                 fullText = content
                 lines = content.split('\n')
@@ -361,6 +377,8 @@ private fun ColumnScope.TextDocumentView(
 private fun ColumnScope.PdfDocumentView(
     item: FileItem,
     fileRepository: FileRepository,
+    hostArchive: FileItem?,
+    archiveManager: ArchiveManager?,
     onClose: () -> Unit,
     onShowMessage: (String) -> Unit
 ) {
@@ -370,11 +388,14 @@ private fun ColumnScope.PdfDocumentView(
     var totalPages by remember { mutableStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(item.id) {
+    LaunchedEffect(item.id, hostArchive?.id) {
         isLoading = true
         withContext(Dispatchers.IO) {
             runCatching {
-                val pfd: ParcelFileDescriptor = if (item.safUri != null) {
+                val pfd: ParcelFileDescriptor = if (hostArchive != null && archiveManager != null) {
+                    val tempPdf = archiveManager.extractSingleEntryToCache(hostArchive, item.path, item.name).getOrThrow()
+                    ParcelFileDescriptor.open(tempPdf, ParcelFileDescriptor.MODE_READ_ONLY)
+                } else if (item.safUri != null) {
                     val tempPdf = File(context.cacheDir, "view_${System.currentTimeMillis()}.pdf")
                     context.contentResolver.openInputStream(item.safUri)?.use { inp ->
                         FileOutputStream(tempPdf).use { out -> inp.copyTo(out) }
@@ -412,7 +433,9 @@ private fun ColumnScope.PdfDocumentView(
             onFailure = {
                 isLoading = false
                 onShowMessage(strings.unknownLabel)
-                fileRepository.openExternally(item)
+                if (hostArchive == null) {
+                    fileRepository.openExternally(item)
+                }
                 onClose()
             }
         )
@@ -456,8 +479,10 @@ private fun ColumnScope.PdfDocumentView(
                     )
                 }
             }
-            IconButton(onClick = { fileRepository.openExternally(item) }) {
-                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
+            if (hostArchive == null) {
+                IconButton(onClick = { fileRepository.openExternally(item) }) {
+                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
+                }
             }
         }
     }
@@ -534,12 +559,28 @@ private fun ColumnScope.PdfDocumentView(
 private fun ColumnScope.ImageDocumentView(
     item: FileItem,
     fileRepository: FileRepository,
+    hostArchive: FileItem?,
+    archiveManager: ArchiveManager?,
     onClose: () -> Unit
 ) {
     val strings = LocalAppStrings.current
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    val modelData: Any = item.safUri ?: File(item.path)
+    var cachedFile by remember(item.id, hostArchive?.id) { mutableStateOf<File?>(null) }
+
+    LaunchedEffect(item.id, hostArchive?.id) {
+        if (hostArchive != null && archiveManager != null) {
+            archiveManager.extractSingleEntryToCache(hostArchive, item.path, item.name).onSuccess {
+                cachedFile = it
+            }
+        }
+    }
+
+    val modelData: Any? = when {
+        hostArchive != null -> cachedFile
+        item.safUri != null -> item.safUri
+        else -> File(item.path)
+    }
 
     Surface(
         shape = RoundedCornerShape(22.dp),
@@ -572,8 +613,10 @@ private fun ColumnScope.ImageDocumentView(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = { fileRepository.openExternally(item) }) {
-                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
+            if (hostArchive == null) {
+                IconButton(onClick = { fileRepository.openExternally(item) }) {
+                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
+                }
             }
         }
     }
@@ -592,19 +635,26 @@ private fun ColumnScope.ImageDocumentView(
             }
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            AsyncImage(
-                model = modelData,
-                contentDescription = item.name,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y
-                    )
-            )
+            if (modelData == null) {
+                ExpressiveWavyProgressIndicator(
+                    progress = null,
+                    modifier = Modifier.widthIn(max = 200.dp)
+                )
+            } else {
+                AsyncImage(
+                    model = modelData,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y
+                        )
+                )
+            }
         }
     }
 }

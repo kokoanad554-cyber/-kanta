@@ -3,6 +3,7 @@ package com.example.localization
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.example.model.AppColorPalette
 import com.example.model.AppLanguage
+import com.example.model.CompressionLevel
 import com.example.model.FileCategory
 import com.example.model.FileOpType
 import com.example.model.FontScaleOption
@@ -14,7 +15,46 @@ import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.pow
 
-data class AppStrings(
+class ProStrings(
+    val testerBadgeLabel: String,
+    val browseAsFolder: String,
+    val testArchive: String,
+    val msgArchiveVerified: (Int) -> String,
+    val msgArchiveUpdated: String,
+    val compressionLevelLabel: String,
+    val levelStore: String,
+    val levelFast: String,
+    val levelNormal: String,
+    val levelMaximum: String,
+    val apkPermissionsLabel: String,
+    val batchRename: String,
+    val batchRenameTitle: String,
+    val findTextLabel: String,
+    val replaceTextLabel: String,
+    val prefixLabel: String,
+    val suffixLabel: String,
+    val autoNumberingLabel: String,
+    val changeExtensionLabel: String,
+    val newExtensionLabel: String,
+    val previewLabel: String,
+    val applyRename: String,
+    val msgBatchRenamed: (Int) -> String,
+    val calculateHashes: String,
+    val verifyHashHint: String,
+    val hashMatched: String,
+    val hashMismatch: String,
+    val calculateFolderSize: String,
+    val folderSummaryStats: (Int, Int) -> String,
+    val favoriteAdd: String,
+    val favoriteRemove: String,
+    val msgFavoriteAdded: String,
+    val msgFavoriteRemoved: String,
+    val androidDataHint: String,
+    val openCodeEditor: String,
+    val extractSelected: String
+)
+
+class AppStrings(
     val appTitle: String,
     val tabFiles: String,
     val tabScanner: String,
@@ -245,8 +285,52 @@ data class AppStrings(
     val scannerError: String,
     val scannerStoppedLabel: String,
     val scannerDeletedCount: (Int) -> String,
-    val scannerMovedCount: (Int) -> String
+    val scannerMovedCount: (Int) -> String,
+    val pro: ProStrings
 ) {
+    val testerBadgeLabel: String get() = pro.testerBadgeLabel
+    val browseAsFolder: String get() = pro.browseAsFolder
+    val testArchive: String get() = pro.testArchive
+    val msgArchiveVerified: (Int) -> String get() = pro.msgArchiveVerified
+    val msgArchiveUpdated: String get() = pro.msgArchiveUpdated
+    val compressionLevelLabel: String get() = pro.compressionLevelLabel
+    val levelStore: String get() = pro.levelStore
+    val levelFast: String get() = pro.levelFast
+    val levelNormal: String get() = pro.levelNormal
+    val levelMaximum: String get() = pro.levelMaximum
+    val apkPermissionsLabel: String get() = pro.apkPermissionsLabel
+    val batchRename: String get() = pro.batchRename
+    val batchRenameTitle: String get() = pro.batchRenameTitle
+    val findTextLabel: String get() = pro.findTextLabel
+    val replaceTextLabel: String get() = pro.replaceTextLabel
+    val prefixLabel: String get() = pro.prefixLabel
+    val suffixLabel: String get() = pro.suffixLabel
+    val autoNumberingLabel: String get() = pro.autoNumberingLabel
+    val changeExtensionLabel: String get() = pro.changeExtensionLabel
+    val newExtensionLabel: String get() = pro.newExtensionLabel
+    val previewLabel: String get() = pro.previewLabel
+    val applyRename: String get() = pro.applyRename
+    val msgBatchRenamed: (Int) -> String get() = pro.msgBatchRenamed
+    val calculateHashes: String get() = pro.calculateHashes
+    val verifyHashHint: String get() = pro.verifyHashHint
+    val hashMatched: String get() = pro.hashMatched
+    val hashMismatch: String get() = pro.hashMismatch
+    val calculateFolderSize: String get() = pro.calculateFolderSize
+    val folderSummaryStats: (Int, Int) -> String get() = pro.folderSummaryStats
+    val favoriteAdd: String get() = pro.favoriteAdd
+    val favoriteRemove: String get() = pro.favoriteRemove
+    val msgFavoriteAdded: String get() = pro.msgFavoriteAdded
+    val msgFavoriteRemoved: String get() = pro.msgFavoriteRemoved
+    val androidDataHint: String get() = pro.androidDataHint
+    val openCodeEditor: String get() = pro.openCodeEditor
+    val extractSelected: String get() = pro.extractSelected
+    fun compressionLabel(level: CompressionLevel): String = when (level) {
+        CompressionLevel.STORE -> levelStore
+        CompressionLevel.FAST -> levelFast
+        CompressionLevel.NORMAL -> levelNormal
+        CompressionLevel.MAXIMUM -> levelMaximum
+    }
+
     fun sortLabel(option: SortOption): String = when (option) {
         SortOption.NAME_ASC -> sortNameAsc
         SortOption.NAME_DESC -> sortNameDesc
@@ -424,7 +508,7 @@ val ArabicStrings = AppStrings(
     settingsTitle = "الإعدادات والتخصيص",
     creatorSectionTitle = "صانع التطبيق",
     creatorSubtitle = "تطوير وتصميم: Kanta",
-    creatorRights = "الإصدار 1.12 • جميع الحقوق محفوظة لتطبيق Kanta ملفات",
+    creatorRights = "الإصدار 1.13 • جميع الحقوق محفوظة لتطبيق Kanta ملفات",
     creatorCopyHandle = "نسخ الحساب",
     creatorOpenHandle = "فتح الحساب",
     creatorEditHandleTitle = "حساب تيك توك",
@@ -438,7 +522,7 @@ val ArabicStrings = AppStrings(
     settingsDynamicColorsSub = "استخراج الألوان تلقائياً من خلفية جهازك",
     settingsColorPalette = "لوحة الألوان المخصصة",
     settingsTypographyTitle = "حجم الخط والقراءة",
-    settingsFontSample = "معاينة الخط الواضح للقراءة داخل القوائم والمستندات • Kanta Files v1.12",
+    settingsFontSample = "معاينة الخط الواضح للقراءة داخل القوائم والمستندات • Kanta Files v1.13",
     settingsExpressiveTitle = "الحركة والأشكال التفاعلية (M3 Expressive)",
     settingsExpressiveAnimations = "حركة وتشكّل الأزرار التفاعلية",
     settingsExpressiveAnimationsSub = "ارتداد مرن وتغير استدارة الأزرار عند الضغط بسلاسة",
@@ -556,7 +640,45 @@ val ArabicStrings = AppStrings(
     scannerError = "حدث خطأ أثناء الفحص",
     scannerStoppedLabel = "تم إيقاف الفحص",
     scannerDeletedCount = { "تم حذف $it ملف" },
-    scannerMovedCount = { "تم نقل $it ملف بنجاح" }
+    scannerMovedCount = { "تم نقل $it ملف بنجاح" },
+    pro = ProStrings(
+        testerBadgeLabel = "مختبر التطبيق",
+        browseAsFolder = "تصفح كمجلد",
+        testArchive = "فحص السلامة",
+        msgArchiveVerified = { "الأرشيف سليم ($it عنصر)" },
+        msgArchiveUpdated = "تم تحديث الأرشيف بنجاح",
+        compressionLevelLabel = "مستوى الضغط",
+        levelStore = "تخزين",
+        levelFast = "سريع",
+        levelNormal = "متوازن",
+        levelMaximum = "أقصى ضغط",
+        apkPermissionsLabel = "الصلاحيات المطلوبة",
+        batchRename = "تسمية جماعية",
+        batchRenameTitle = "إعادة التسمية الجماعية",
+        findTextLabel = "ابحث عن نص",
+        replaceTextLabel = "استبدله بـ",
+        prefixLabel = "بادئة الاسم",
+        suffixLabel = "لاحقة الاسم",
+        autoNumberingLabel = "ترقيم تسلسلي (01, 02...)",
+        changeExtensionLabel = "تغيير الامتداد",
+        newExtensionLabel = "الامتداد الجديد (مثل txt)",
+        previewLabel = "معاينة قبل التطبيق",
+        applyRename = "تطبيق التسمية",
+        msgBatchRenamed = { "تمت إعادة تسمية $it عنصر" },
+        calculateHashes = "حساب البصمة (MD5 / SHA)",
+        verifyHashHint = "الصق بصمة للمطابقة...",
+        hashMatched = "متطابق 100%",
+        hashMismatch = "غير متطابق",
+        calculateFolderSize = "حساب الحجم الكامل للمجلد",
+        folderSummaryStats = { files, folders -> "$files ملف • $folders مجلد" },
+        favoriteAdd = "إضافة للمفضلة",
+        favoriteRemove = "إزالة من المفضلة",
+        msgFavoriteAdded = "تمت الإضافة للمفضلة",
+        msgFavoriteRemoved = "تمت الإزالة من المفضلة",
+        androidDataHint = "اختر مجلد Android/data أو Android/obb من شاشة النظام لمنح الوصول",
+        openCodeEditor = "تعديل النص / الكود",
+        extractSelected = "استخراج المحدد"
+    )
 )
 
 val EnglishStrings = AppStrings(
@@ -666,7 +788,7 @@ val EnglishStrings = AppStrings(
     settingsTitle = "Settings & Customization",
     creatorSectionTitle = "App Creator",
     creatorSubtitle = "Designed & Built by Kanta",
-    creatorRights = "Version 1.12 • Kanta Files",
+    creatorRights = "Version 1.13 • Kanta Files",
     creatorCopyHandle = "Copy Handle",
     creatorOpenHandle = "Open Profile",
     creatorEditHandleTitle = "TikTok Handle",
@@ -680,7 +802,7 @@ val EnglishStrings = AppStrings(
     settingsDynamicColorsSub = "Extract system accent colors from your wallpaper",
     settingsColorPalette = "Custom Color Palette",
     settingsTypographyTitle = "Font Size & Readability",
-    settingsFontSample = "Preview crisp typography across menus & documents • Kanta Files v1.12",
+    settingsFontSample = "Preview crisp typography across menus & documents • Kanta Files v1.13",
     settingsExpressiveTitle = "M3 Expressive Motion & Shapes",
     settingsExpressiveAnimations = "Morphing Pill & Bounce Animations",
     settingsExpressiveAnimationsSub = "Smooth spring feedback and corner morphing on tap",
@@ -796,7 +918,45 @@ val EnglishStrings = AppStrings(
     scannerError = "Scan error occurred",
     scannerStoppedLabel = "Scan stopped",
     scannerDeletedCount = { "Deleted $it file(s)" },
-    scannerMovedCount = { "Moved $it file(s)" }
+    scannerMovedCount = { "Moved $it file(s)" },
+    pro = ProStrings(
+        testerBadgeLabel = "App Tester",
+        browseAsFolder = "Browse Contents",
+        testArchive = "Test Integrity",
+        msgArchiveVerified = { "Archive verified ($it entries)" },
+        msgArchiveUpdated = "Archive updated successfully",
+        compressionLevelLabel = "Compression Level",
+        levelStore = "Store",
+        levelFast = "Fast",
+        levelNormal = "Normal",
+        levelMaximum = "Maximum",
+        apkPermissionsLabel = "Requested Permissions",
+        batchRename = "Batch Rename",
+        batchRenameTitle = "Batch Rename",
+        findTextLabel = "Find text",
+        replaceTextLabel = "Replace with",
+        prefixLabel = "Prefix",
+        suffixLabel = "Suffix",
+        autoNumberingLabel = "Sequential numbering (01, 02...)",
+        changeExtensionLabel = "Change extension",
+        newExtensionLabel = "New extension (e.g. txt)",
+        previewLabel = "Live Preview",
+        applyRename = "Apply Rename",
+        msgBatchRenamed = { "Renamed $it item(s)" },
+        calculateHashes = "Calculate Hashes (MD5 / SHA)",
+        verifyHashHint = "Paste hash to verify...",
+        hashMatched = "Hash Matched",
+        hashMismatch = "Hash Mismatch",
+        calculateFolderSize = "Analyze Folder Size",
+        folderSummaryStats = { files, folders -> "$files files • $folders folders" },
+        favoriteAdd = "Pin to Favorites",
+        favoriteRemove = "Unpin Favorite",
+        msgFavoriteAdded = "Pinned to favorites",
+        msgFavoriteRemoved = "Removed from favorites",
+        androidDataHint = "Select Android/data or Android/obb in the system picker to grant access",
+        openCodeEditor = "Edit Text / Code",
+        extractSelected = "Extract Selected"
+    )
 )
 
 val ChineseStrings = AppStrings(
@@ -906,7 +1066,7 @@ val ChineseStrings = AppStrings(
     settingsTitle = "设置与个性化",
     creatorSectionTitle = "应用开发者",
     creatorSubtitle = "设计与开发: Kanta",
-    creatorRights = "版本 1.12 • Kanta Files",
+    creatorRights = "版本 1.13 • Kanta Files",
     creatorCopyHandle = "复制账号",
     creatorOpenHandle = "打开主页",
     creatorEditHandleTitle = "TikTok 账号",
@@ -920,7 +1080,7 @@ val ChineseStrings = AppStrings(
     settingsDynamicColorsSub = "根据系统壁纸自动提取主题色",
     settingsColorPalette = "自定义配色方案",
     settingsTypographyTitle = "字体大小与阅读",
-    settingsFontSample = "列表与文档字体大小实时预览 • Kanta Files v1.12",
+    settingsFontSample = "列表与文档字体大小实时预览 • Kanta Files v1.13",
     settingsExpressiveTitle = "M3 灵动交互与形态",
     settingsExpressiveAnimations = "灵动回弹与圆角形变动画",
     settingsExpressiveAnimationsSub = "轻点按钮时的弹性圆角形变与波浪进度动效",
@@ -1032,7 +1192,45 @@ val ChineseStrings = AppStrings(
     scannerError = "扫描出错",
     scannerStoppedLabel = "扫描已停止",
     scannerDeletedCount = { "已删除 $it 个文件" },
-    scannerMovedCount = { "已成功移动 $it 个文件" }
+    scannerMovedCount = { "已成功移动 $it 个文件" },
+    pro = ProStrings(
+        testerBadgeLabel = "应用测试",
+        browseAsFolder = "浏览内部文件",
+        testArchive = "校验完整性",
+        msgArchiveVerified = { "压缩包校验正常（$it 项）" },
+        msgArchiveUpdated = "压缩包已更新",
+        compressionLevelLabel = "压缩级别",
+        levelStore = "仅存储",
+        levelFast = "快速",
+        levelNormal = "标准",
+        levelMaximum = "极限压缩",
+        apkPermissionsLabel = "所需权限",
+        batchRename = "批量重命名",
+        batchRenameTitle = "批量重命名",
+        findTextLabel = "查找文本",
+        replaceTextLabel = "替换为",
+        prefixLabel = "前缀",
+        suffixLabel = "后缀",
+        autoNumberingLabel = "自动编号 (01, 02...)",
+        changeExtensionLabel = "更改扩展名",
+        newExtensionLabel = "新扩展名 (如 txt)",
+        previewLabel = "重命名预览",
+        applyRename = "应用重命名",
+        msgBatchRenamed = { "已重命名 $it 项" },
+        calculateHashes = "计算校验和 (MD5 / SHA)",
+        verifyHashHint = "粘贴校验和进行比对...",
+        hashMatched = "校验完全匹配",
+        hashMismatch = "校验不匹配",
+        calculateFolderSize = "统计文件夹大小",
+        folderSummaryStats = { files, folders -> "$files 个文件 • $folders 个文件夹" },
+        favoriteAdd = "收藏目录",
+        favoriteRemove = "取消收藏",
+        msgFavoriteAdded = "已添加到收藏",
+        msgFavoriteRemoved = "已取消收藏",
+        androidDataHint = "请在系统选择器中选择 Android/data 或 Android/obb 以授权",
+        openCodeEditor = "编辑文本/代码",
+        extractSelected = "解压所选"
+    )
 )
 
 fun stringsForLanguage(language: AppLanguage): AppStrings = when (language) {
