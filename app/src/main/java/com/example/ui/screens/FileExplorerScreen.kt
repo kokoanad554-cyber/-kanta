@@ -8,12 +8,20 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,15 +73,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -86,6 +91,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -94,17 +102,24 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.localization.LocalAppStrings
 import com.example.model.ClipboardAction
 import com.example.model.FileCategory
 import com.example.model.FileItem
+import com.example.model.ListDensity
 import com.example.model.SortOption
+import com.example.model.StorageRootType
 import com.example.ui.components.CompressZipDialog
 import com.example.ui.components.CreateFileDialog
 import com.example.ui.components.CreateFolderDialog
 import com.example.ui.components.DeleteConfirmDialog
 import com.example.ui.components.FileCategoryBadge
+import com.example.ui.components.LocalExpressiveAnimations
 import com.example.ui.components.RenameDialog
+import com.example.ui.components.ScallopedCookieShape
+import com.example.ui.components.Tactile3DSurface
 import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.ui.theme.LocalListDensity
 import com.example.ui.viewmodel.ExplorerUiState
 import com.example.ui.viewmodel.FileExplorerViewModel
 import com.example.util.FormatUtils
@@ -117,6 +132,9 @@ fun FileExplorerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val strings = LocalAppStrings.current
+    val expressive = LocalExpressiveAnimations.current
+    val density = LocalListDensity.current
 
     var showSearch by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -155,6 +173,24 @@ fun FileExplorerScreen(
         viewModel.navigateUp()
     }
 
+    val animatedStorageFraction by animateFloatAsState(
+        targetValue = uiState.storageStats.usedFraction,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "storage_fraction"
+    )
+
+    val fabRotation by animateFloatAsState(
+        targetValue = if (expressive && showFabMenu) 45f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "fab_rotation"
+    )
+
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -164,39 +200,52 @@ fun FileExplorerScreen(
                 top = 8.dp,
                 bottom = 148.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 11.dp)
         ) {
-            // Top bar with comfortable edge separation
+            // Top 3D Expressive Header Card
             item {
                 Spacer(modifier = Modifier.statusBarsPadding())
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    tonalElevation = 2.dp
+                val headerBg = MaterialTheme.colorScheme.surfaceContainerLow
+                val headerBevel = remember(headerBg) { lerp(headerBg, Color.Black, 0.30f) }
+                val headerRim = remember(headerBg) { lerp(headerBg, Color.White, 0.10f) }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(headerBevel)
+                        .padding(bottom = 4.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = headerBg,
+                        border = BorderStroke(1.dp, headerRim),
+                        tonalElevation = 2.dp
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                if (uiState.breadcrumbs.size > 1 || uiState.isSelectionMode) {
-                                    Surface(
-                                        shape = RoundedCornerShape(14.dp),
-                                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {
-                                        IconButton(
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (uiState.breadcrumbs.size > 1 || uiState.isSelectionMode) {
+                                        Tactile3DSurface(
                                             onClick = { viewModel.navigateUp() },
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            restingCornerRadius = 18.dp,
+                                            pressedCornerRadius = 10.dp,
+                                            bevelDepth = 3.dp,
                                             modifier = Modifier
                                                 .size(48.dp)
                                                 .testTag("explorer_back_button")
@@ -207,160 +256,210 @@ fun FileExplorerScreen(
                                                 } else {
                                                     Icons.AutoMirrored.Rounded.ArrowBack
                                                 },
-                                                contentDescription = "رجوع"
+                                                contentDescription = strings.back
                                             )
                                         }
                                     }
+                                    Column {
+                                        AnimatedContent(
+                                            targetState = if (uiState.isSelectionMode) {
+                                                strings.selectedCount(uiState.selectedIds.size)
+                                            } else {
+                                                val lastTitle = uiState.breadcrumbs.lastOrNull()?.title
+                                                if (uiState.breadcrumbs.size <= 1) strings.appTitle else (lastTitle ?: strings.appTitle)
+                                            },
+                                            transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.94f)) togetherWith fadeOut() },
+                                            label = "header_title"
+                                        ) { titleText ->
+                                            Text(
+                                                text = titleText,
+                                                style = MaterialTheme.typography.titleLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            text = strings.itemCountText(uiState.displayedItems.size),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
-                                Column {
-                                    Text(
-                                        text = if (uiState.isSelectionMode) {
-                                            "تم تحديد ${uiState.selectedIds.size}"
-                                        } else {
-                                            uiState.breadcrumbs.lastOrNull()?.title ?: "Kanta ملفات"
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Tactile3DSurface(
+                                        onClick = {
+                                            showSearch = !showSearch
+                                            if (!showSearch) viewModel.updateSearchQuery("")
                                         },
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = FormatUtils.formatCountItems(uiState.displayedItems.size),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = {
-                                        showSearch = !showSearch
-                                        if (!showSearch) viewModel.updateSearchQuery("")
-                                    },
-                                    modifier = Modifier.testTag("toggle_search_button")
-                                ) {
-                                    Icon(Icons.Rounded.Search, contentDescription = "بحث")
-                                }
-                                Box {
-                                    IconButton(
-                                        onClick = { showSortMenu = true },
-                                        modifier = Modifier.testTag("sort_menu_button")
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = "ترتيب")
-                                    }
-                                    DropdownMenu(
-                                        expanded = showSortMenu,
-                                        onDismissRequest = { showSortMenu = false },
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    ) {
-                                        SortOption.entries.forEach { option ->
-                                            DropdownMenuItem(
-                                                text = {
-                                                    Text(
-                                                        text = option.labelAr,
-                                                        fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (uiState.sortOption == option) {
-                                                            MaterialTheme.colorScheme.primary
-                                                        } else {
-                                                            MaterialTheme.colorScheme.onSurface
-                                                        }
-                                                    )
-                                                },
-                                                onClick = {
-                                                    viewModel.updateSortOption(option)
-                                                    showSortMenu = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                                IconButton(
-                                    onClick = { safLauncher.launch(null) },
-                                    modifier = Modifier.testTag("add_saf_folder_button")
-                                ) {
-                                    Icon(Icons.Rounded.FolderSpecial, contentDescription = "إضافة مجلد SAF")
-                                }
-                                IconButton(onClick = { viewModel.refreshCurrentDirectory() }) {
-                                    Icon(Icons.Rounded.Refresh, contentDescription = "تحديث")
-                                }
-                            }
-                        }
-
-                        AnimatedVisibility(visible = showSearch) {
-                            OutlinedTextField(
-                                value = uiState.searchQuery,
-                                onValueChange = { viewModel.updateSearchQuery(it) },
-                                placeholder = { Text("ابحث في هذا المجلد...") },
-                                singleLine = true,
-                                trailingIcon = {
-                                    if (uiState.searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                            Icon(Icons.Rounded.Close, contentDescription = "مسح")
-                                        }
-                                    }
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        // Breadcrumbs Row
-                        if (uiState.breadcrumbs.isNotEmpty()) {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                itemsIndexed(uiState.breadcrumbs) { idx, segment ->
-                                    val isLast = idx == uiState.breadcrumbs.lastIndex
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = if (isLast) {
+                                        containerColor = if (showSearch) {
                                             MaterialTheme.colorScheme.primaryContainer
                                         } else {
                                             MaterialTheme.colorScheme.surfaceContainerHigh
                                         },
+                                        contentColor = if (showSearch) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        restingCornerRadius = 16.dp,
+                                        pressedCornerRadius = 10.dp,
+                                        bevelDepth = 2.5.dp,
                                         modifier = Modifier
-                                            .heightIn(min = 36.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable { viewModel.navigateToBreadcrumb(segment) }
+                                            .size(44.dp)
+                                            .testTag("toggle_search_button")
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        Icon(Icons.Rounded.Search, contentDescription = strings.search, modifier = Modifier.size(20.dp))
+                                    }
+
+                                    Box {
+                                        Tactile3DSurface(
+                                            onClick = { showSortMenu = true },
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                            restingCornerRadius = 16.dp,
+                                            pressedCornerRadius = 10.dp,
+                                            bevelDepth = 2.5.dp,
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .testTag("sort_menu_button")
                                         ) {
-                                            if (idx == 0) {
-                                                Icon(
-                                                    Icons.Rounded.Home,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(16.dp),
-                                                    tint = if (isLast) {
-                                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                            Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = strings.sort, modifier = Modifier.size(20.dp))
+                                        }
+                                        DropdownMenu(
+                                            expanded = showSortMenu,
+                                            onDismissRequest = { showSortMenu = false },
+                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                        ) {
+                                            SortOption.entries.forEach { option ->
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            text = strings.sortLabel(option),
+                                                            fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
+                                                            color = if (uiState.sortOption == option) {
+                                                                MaterialTheme.colorScheme.primary
+                                                            } else {
+                                                                MaterialTheme.colorScheme.onSurface
+                                                            }
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        viewModel.updateSortOption(option)
+                                                        showSortMenu = false
                                                     }
                                                 )
                                             }
-                                            Text(
-                                                text = segment.title,
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isLast) {
-                                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                }
-                                            )
                                         }
                                     }
-                                    if (!isLast) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+
+                                    Tactile3DSurface(
+                                        onClick = { safLauncher.launch(null) },
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        restingCornerRadius = 16.dp,
+                                        pressedCornerRadius = 10.dp,
+                                        bevelDepth = 2.5.dp,
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .testTag("add_saf_folder_button")
+                                    ) {
+                                        Icon(Icons.Rounded.FolderSpecial, contentDescription = strings.addSafFolder, modifier = Modifier.size(20.dp))
+                                    }
+
+                                    Tactile3DSurface(
+                                        onClick = { viewModel.refreshCurrentDirectory() },
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        restingCornerRadius = 16.dp,
+                                        pressedCornerRadius = 10.dp,
+                                        bevelDepth = 2.5.dp,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(Icons.Rounded.Refresh, contentDescription = strings.refresh, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                            }
+
+                            AnimatedVisibility(
+                                visible = showSearch,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                OutlinedTextField(
+                                    value = uiState.searchQuery,
+                                    onValueChange = { viewModel.updateSearchQuery(it) },
+                                    placeholder = { Text(strings.searchInFolder) },
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        if (uiState.searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                                Icon(Icons.Rounded.Close, contentDescription = strings.close)
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(18.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            // 3D Expressive Breadcrumbs Pills
+                            if (uiState.breadcrumbs.isNotEmpty()) {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    itemsIndexed(uiState.breadcrumbs) { idx, segment ->
+                                        val isLast = idx == uiState.breadcrumbs.lastIndex
+                                        val label = if (idx == 0 && segment.safUri == null && segment.path != "/") {
+                                            strings.rootInternal
+                                        } else {
+                                            segment.title
+                                        }
+                                        Tactile3DSurface(
+                                            onClick = { viewModel.navigateToBreadcrumb(segment) },
+                                            containerColor = if (isLast) {
+                                                MaterialTheme.colorScheme.primaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                            },
+                                            contentColor = if (isLast) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            },
+                                            restingCornerRadius = 16.dp,
+                                            pressedCornerRadius = 9.dp,
+                                            bevelDepth = 2.dp
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                            ) {
+                                                if (idx == 0) {
+                                                    Icon(
+                                                        Icons.Rounded.Home,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                                Text(
+                                                    text = label,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium
+                                                )
+                                            }
+                                        }
+                                        if (!isLast) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -369,11 +468,11 @@ fun FileExplorerScreen(
                 }
             }
 
-            // Permission Request Banner if not granted
+            // Permission Request Banner
             if (!uiState.hasStoragePermission) {
                 item {
                     Surface(
-                        shape = RoundedCornerShape(22.dp),
+                        shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Column(
@@ -392,14 +491,14 @@ fun FileExplorerScreen(
                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                                 Text(
-                                    text = "صلاحية إدارة كل الملفات مطلوبة",
+                                    text = strings.permissionRequiredTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                             Text(
-                                text = "للوصول إلى جميع ملفات الذاكرة الداخلية ومجلدات النظام، امنح صلاحية الوصول الكامل للملفات أو اختر مجلداً عبر SAF.",
+                                text = strings.permissionRequiredDesc,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -432,7 +531,7 @@ fun FileExplorerScreen(
                                         .heightIn(min = 48.dp)
                                         .testTag("grant_storage_permission_button")
                                 ) {
-                                    Text("منح الصلاحية")
+                                    Text(strings.grantPermission)
                                 }
                                 OutlinedButton(
                                     onClick = { safLauncher.launch(null) },
@@ -440,7 +539,7 @@ fun FileExplorerScreen(
                                         .weight(1f)
                                         .heightIn(min = 48.dp)
                                 ) {
-                                    Text("اختيار مجلد SAF")
+                                    Text(strings.chooseSafFolder)
                                 }
                             }
                         }
@@ -448,63 +547,104 @@ fun FileExplorerScreen(
                 }
             }
 
-            // Storage Capacity & Roots Strip
+            // Storage Stats & 3D Quick Roots Strip
             item {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer
+                val stripColor = MaterialTheme.colorScheme.surfaceContainer
+                val stripBevel = remember(stripColor) { lerp(stripColor, Color.Black, 0.28f) }
+                val stripRim = remember(stripColor) { lerp(stripColor, Color.White, 0.08f) }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(stripBevel)
+                        .padding(bottom = 3.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = stripColor,
+                        border = BorderStroke(1.dp, stripRim)
                     ) {
-                        if (uiState.storageStats.totalBytes > 0L) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (uiState.storageStats.totalBytes > 0L) {
                                 Row(
+                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Icon(
-                                        Icons.Rounded.Storage,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Storage,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = strings.storageSpace,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                     Text(
-                                        text = "مساحة التخزين",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.SemiBold
+                                        text = strings.storageAvailableOf(
+                                            strings.formatBytes(uiState.storageStats.freeBytes),
+                                            strings.formatBytes(uiState.storageStats.totalBytes)
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Text(
-                                    text = "متاح ${FormatUtils.formatBytes(uiState.storageStats.freeBytes)} من ${FormatUtils.formatBytes(uiState.storageStats.totalBytes)}",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                LinearProgressIndicator(
+                                    progress = { animatedStorageFraction },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
                                 )
                             }
-                            LinearProgressIndicator(
-                                progress = { uiState.storageStats.usedFraction },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(7.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                            )
-                        }
 
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(uiState.storageRoots, key = { it.id }) { root ->
-                                val isCurrent = uiState.currentPath == root.path
-                                FilterChip(
-                                    selected = isCurrent,
-                                    onClick = { viewModel.navigateToRoot(root) },
-                                    label = { Text(root.title) }
-                                )
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(uiState.storageRoots, key = { it.id }) { root ->
+                                    val isCurrent = uiState.currentPath == root.path
+                                    val rootLabel = when (root.type) {
+                                        StorageRootType.INTERNAL -> strings.rootInternal
+                                        StorageRootType.DOWNLOADS -> strings.rootDownloads
+                                        StorageRootType.DOCUMENTS -> strings.rootDocuments
+                                        StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
+                                        StorageRootType.SAF_TREE -> root.title
+                                    }
+                                    Tactile3DSurface(
+                                        onClick = { viewModel.navigateToRoot(root) },
+                                        containerColor = if (isCurrent) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainerHigh
+                                        },
+                                        contentColor = if (isCurrent) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        restingCornerRadius = 20.dp,
+                                        pressedCornerRadius = 11.dp,
+                                        bevelDepth = if (isCurrent) 3.dp else 2.dp
+                                    ) {
+                                        Text(
+                                            text = rootLabel,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -515,8 +655,9 @@ fun FileExplorerScreen(
             if (uiState.isSelectionMode) {
                 item {
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
+                        shape = RoundedCornerShape(22.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier.animateItem()
                     ) {
                         LazyRow(
                             modifier = Modifier
@@ -529,7 +670,7 @@ fun FileExplorerScreen(
                                 TextButton(onClick = { viewModel.selectAll() }) {
                                     Icon(Icons.Rounded.SelectAll, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("تحديد الكل")
+                                    Text(strings.selectAll)
                                 }
                             }
                             item {
@@ -538,7 +679,7 @@ fun FileExplorerScreen(
                                 }) {
                                     Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("نسخ")
+                                    Text(strings.copy)
                                 }
                             }
                             item {
@@ -547,7 +688,7 @@ fun FileExplorerScreen(
                                 }) {
                                     Icon(Icons.Rounded.ContentCut, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("قص")
+                                    Text(strings.cut)
                                 }
                             }
                             item {
@@ -556,33 +697,27 @@ fun FileExplorerScreen(
                                 }) {
                                     Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("نقل")
+                                    Text(strings.move)
                                 }
                             }
                             item {
-                                TextButton(onClick = {
-                                    compressTargets = uiState.selectedItems
-                                }) {
+                                TextButton(onClick = { compressTargets = uiState.selectedItems }) {
                                     Icon(Icons.Rounded.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("ضغط ZIP")
+                                    Text(strings.compressZip)
                                 }
                             }
                             if (uiState.selectedItems.size == 1) {
                                 item {
-                                    TextButton(onClick = {
-                                        renameTarget = uiState.selectedItems.first()
-                                    }) {
+                                    TextButton(onClick = { renameTarget = uiState.selectedItems.first() }) {
                                         Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(Modifier.width(4.dp))
-                                        Text("تسمية")
+                                        Text(strings.rename)
                                     }
                                 }
                             }
                             item {
-                                TextButton(onClick = {
-                                    deleteTargets = uiState.selectedItems
-                                }) {
+                                TextButton(onClick = { deleteTargets = uiState.selectedItems }) {
                                     Icon(
                                         Icons.Rounded.DeleteOutline,
                                         contentDescription = null,
@@ -590,7 +725,7 @@ fun FileExplorerScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(Modifier.width(4.dp))
-                                    Text("حذف", color = MaterialTheme.colorScheme.error)
+                                    Text(strings.delete, color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
@@ -603,8 +738,9 @@ fun FileExplorerScreen(
                 item {
                     val clip = uiState.clipboard
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer
+                        shape = RoundedCornerShape(22.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        modifier = Modifier.animateItem()
                     ) {
                         Row(
                             modifier = Modifier
@@ -615,28 +751,35 @@ fun FileExplorerScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (clip.action == ClipboardAction.COPY) "جاهز للنسخ" else "جاهز للنقل",
+                                    text = if (clip.action == ClipboardAction.COPY) strings.readyToCopy else strings.readyToMove,
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                                 Text(
-                                    text = FormatUtils.formatCountItems(clip.items.size),
+                                    text = strings.itemCountText(clip.items.size),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
                                 )
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = { viewModel.clearClipboard() }) {
-                                    Text("إلغاء")
+                                    Text(strings.cancel)
                                 }
-                                Button(
+                                Tactile3DSurface(
                                     onClick = { viewModel.pasteClipboardHere() },
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.testTag("paste_here_button")
                                 ) {
-                                    Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("لصق هنا")
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(strings.pasteHere, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -681,7 +824,7 @@ fun FileExplorerScreen(
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             OutlinedButton(onClick = { viewModel.navigateUp() }) {
-                                Text("العودة للخلف")
+                                Text(strings.goBack)
                             }
                         }
                     }
@@ -689,7 +832,7 @@ fun FileExplorerScreen(
             } else if (uiState.displayedItems.isEmpty()) {
                 item {
                     Surface(
-                        shape = RoundedCornerShape(22.dp),
+                        shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         Column(
@@ -706,12 +849,11 @@ fun FileExplorerScreen(
                                 modifier = Modifier.size(44.dp)
                             )
                             Text(
-                                text = "المجلد فارغ",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = strings.emptyFolder,
+                                style = MaterialTheme.typography.titleMedium
                             )
                             Text(
-                                text = "يمكنك إنشاء مجلد أو ملف جديد باستخدام زر الإضافة بالأسفل.",
+                                text = strings.emptyFolderHint,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -723,6 +865,14 @@ fun FileExplorerScreen(
                     FileItemRow(
                         item = item,
                         isSelected = item.id in uiState.selectedIds,
+                        isCompact = density == ListDensity.COMPACT,
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                            placementSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ),
                         onClick = { viewModel.onItemClick(item) },
                         onLongClick = { viewModel.toggleSelection(item) },
                         onCopy = { viewModel.copyToClipboard(listOf(item), ClipboardAction.COPY) },
@@ -738,7 +888,7 @@ fun FileExplorerScreen(
             }
         }
 
-        // Floating Add Actions positioned comfortably above the Floating Capsule Nav Bar
+        // Scalloped 3D Expressive Floating Actions
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -749,60 +899,89 @@ fun FileExplorerScreen(
         ) {
             AnimatedVisibility(
                 visible = showFabMenu,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn() + scaleIn(
+                    initialScale = 0.8f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                ),
+                exit = fadeOut() + scaleOut(targetScale = 0.85f)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SmallFloatingActionButton(
+                    Tactile3DSurface(
                         onClick = {
                             showFabMenu = false
                             showCreateFolderDialog = true
                         },
                         containerColor = MaterialTheme.colorScheme.secondaryContainer,
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        restingCornerRadius = 22.dp,
+                        pressedCornerRadius = 12.dp,
+                        bevelDepth = 3.dp,
                         modifier = Modifier.testTag("fab_new_folder")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Rounded.CreateNewFolder, contentDescription = "مجلد جديد")
-                            Text("مجلد جديد", style = MaterialTheme.typography.labelLarge)
+                            Icon(Icons.Rounded.CreateNewFolder, contentDescription = strings.newFolder)
+                            Text(strings.newFolder, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                         }
                     }
-                    SmallFloatingActionButton(
+
+                    Tactile3DSurface(
                         onClick = {
                             showFabMenu = false
                             showCreateFileDialog = true
                         },
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        restingCornerRadius = 22.dp,
+                        pressedCornerRadius = 12.dp,
+                        bevelDepth = 3.dp,
                         modifier = Modifier.testTag("fab_new_file")
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Rounded.NoteAdd, contentDescription = "ملف جديد")
-                            Text("ملف جديد", style = MaterialTheme.typography.labelLarge)
+                            Icon(Icons.Rounded.NoteAdd, contentDescription = strings.newFile)
+                            Text(strings.newFile, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
-            FloatingActionButton(
-                onClick = { showFabMenu = !showFabMenu },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.testTag("explorer_fab_main")
+            // Signature Scalloped Cookie 3D FAB from the M3 Expressive video
+            val fabBg = MaterialTheme.colorScheme.primaryContainer
+            val fabBevel = remember(fabBg) { lerp(fabBg, Color.Black, 0.36f) }
+            val cookieShape = remember { ScallopedCookieShape(lobes = 10, depthFraction = 0.085f) }
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(cookieShape)
+                    .background(fabBevel)
+                    .padding(bottom = 3.5.dp)
             ) {
-                Icon(
-                    imageVector = if (showFabMenu) Icons.Rounded.Close else Icons.Rounded.Add,
-                    contentDescription = "إنشاء عنصر"
-                )
+                Surface(
+                    onClick = { showFabMenu = !showFabMenu },
+                    shape = cookieShape,
+                    color = fabBg,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .testTag("explorer_fab_main")
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = strings.createItem,
+                            modifier = Modifier
+                                .size(28.dp)
+                                .graphicsLayer { rotationZ = fabRotation }
+                        )
+                    }
+                }
             }
         }
     }
@@ -867,11 +1046,12 @@ fun FileExplorerScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileItemRow(
     item: FileItem,
     isSelected: Boolean,
+    isCompact: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onCopy: () -> Unit,
@@ -883,38 +1063,48 @@ private fun FileItemRow(
     onDetails: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = if (isSelected) {
+    Tactile3DSurface(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        containerColor = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surfaceContainerLow
         },
-        tonalElevation = if (isSelected) 4.dp else 1.dp,
-        modifier = Modifier
+        contentColor = if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+        restingCornerRadius = if (isCompact) 16.dp else 22.dp,
+        pressedCornerRadius = 11.dp,
+        bevelDepth = if (isCompact) 2.dp else 3.5.dp,
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
             .testTag("file_item_${item.name}")
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(
+                    horizontal = 12.dp,
+                    vertical = if (isCompact) 7.dp else 11.dp
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(contentAlignment = Alignment.TopEnd) {
-                FileCategoryBadge(category = item.category, size = 46.dp)
+                FileCategoryBadge(
+                    category = item.category,
+                    size = if (isCompact) 40.dp else 46.dp
+                )
                 if (isSelected) {
                     Icon(
                         imageVector = Icons.Rounded.CheckCircle,
-                        contentDescription = "محدد",
+                        contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -929,45 +1119,35 @@ private fun FileItemRow(
                     text = item.name,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val primaryMeta = if (item.isDirectory) {
+                    item.childCount?.let { strings.itemCountText(it) } ?: strings.folder
+                } else {
+                    strings.formatBytes(item.sizeBytes)
+                }
+                Text(
+                    text = "$primaryMeta • ${FormatUtils.formatDate(item.lastModifiedMillis, strings.unknownLabel)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
                     color = if (isSelected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
-                        MaterialTheme.colorScheme.onSurface
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val primaryMeta = if (item.isDirectory) {
-                        item.childCount?.let { FormatUtils.formatCountItems(it) } ?: "مجلد"
-                    } else {
-                        FormatUtils.formatBytes(item.sizeBytes)
-                    }
-                    Text(
-                        text = "$primaryMeta • ${FormatUtils.formatDate(item.lastModifiedMillis)}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
 
             Box {
                 IconButton(
                     onClick = { menuExpanded = true },
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(44.dp)
                 ) {
                     Icon(
                         Icons.Rounded.MoreVert,
-                        contentDescription = "خيارات",
+                        contentDescription = strings.detailsAndOpen,
                         tint = if (isSelected) {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
@@ -982,7 +1162,7 @@ private fun FileItemRow(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
                     DropdownMenuItem(
-                        text = { Text("الخصائص والفتح") },
+                        text = { Text(strings.detailsAndOpen) },
                         leadingIcon = { Icon(Icons.Rounded.Info, contentDescription = null) },
                         onClick = {
                             menuExpanded = false
@@ -991,7 +1171,7 @@ private fun FileItemRow(
                     )
                     if (item.category == FileCategory.ARCHIVE) {
                         DropdownMenuItem(
-                            text = { Text("استخراج الأرشيف") },
+                            text = { Text(strings.extractArchive) },
                             leadingIcon = { Icon(Icons.Rounded.Unarchive, contentDescription = null) },
                             onClick = {
                                 menuExpanded = false
@@ -1000,7 +1180,7 @@ private fun FileItemRow(
                         )
                     }
                     DropdownMenuItem(
-                        text = { Text("نسخ") },
+                        text = { Text(strings.copy) },
                         leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
                         onClick = {
                             menuExpanded = false
@@ -1008,7 +1188,7 @@ private fun FileItemRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("قص") },
+                        text = { Text(strings.cut) },
                         leadingIcon = { Icon(Icons.Rounded.ContentCut, contentDescription = null) },
                         onClick = {
                             menuExpanded = false
@@ -1016,7 +1196,7 @@ private fun FileItemRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("نقل إلى...") },
+                        text = { Text(strings.moveTo) },
                         leadingIcon = { Icon(Icons.AutoMirrored.Rounded.DriveFileMove, contentDescription = null) },
                         onClick = {
                             menuExpanded = false
@@ -1024,7 +1204,7 @@ private fun FileItemRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("ضغط إلى ZIP") },
+                        text = { Text(strings.compressZip) },
                         leadingIcon = { Icon(Icons.Rounded.Archive, contentDescription = null) },
                         onClick = {
                             menuExpanded = false
@@ -1032,7 +1212,7 @@ private fun FileItemRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("إعادة تسمية") },
+                        text = { Text(strings.rename) },
                         leadingIcon = { Icon(Icons.Rounded.DriveFileRenameOutline, contentDescription = null) },
                         onClick = {
                             menuExpanded = false
@@ -1040,7 +1220,7 @@ private fun FileItemRow(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("حذف", color = MaterialTheme.colorScheme.error) },
+                        text = { Text(strings.delete, color = MaterialTheme.colorScheme.error) },
                         leadingIcon = {
                             Icon(
                                 Icons.Rounded.DeleteOutline,

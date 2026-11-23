@@ -9,6 +9,8 @@ import com.example.data.ApkInspector
 import com.example.data.ArchiveManager
 import com.example.data.FileRepository
 import com.example.data.PreferencesRepository
+import com.example.localization.AppStrings
+import com.example.localization.stringsForLanguage
 import com.example.model.ApkMetadata
 import com.example.model.ArchiveEntryInfo
 import com.example.model.BreadcrumbSegment
@@ -84,6 +86,8 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     val preferences: StateFlow<UserPreferences> = preferencesRepository.preferencesFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, UserPreferences())
 
+    private fun currentStrings(): AppStrings = stringsForLanguage(preferences.value.language)
+
     private val _uiState = MutableStateFlow(
         ExplorerUiState(
             hasStoragePermission = fileRepository.hasStoragePermission(),
@@ -101,7 +105,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             preferencesRepository.preferencesFlow.collect { prefs ->
                 val roots = fileRepository.getStorageRoots(prefs.safTreeUris, prefs.showSystemPaths)
-                _uiState.update { it.copy(storageRoots = roots) }
+                _uiState.update {
+                    it.copy(
+                        storageRoots = roots,
+                        sortOption = prefs.defaultSortOption
+                    )
+                }
                 refreshCurrentDirectory()
             }
         }
@@ -144,7 +153,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    private fun navigateToSafRoot(uri: Uri, title: String = "مجلد SAF") {
+    private fun navigateToSafRoot(uri: Uri, title: String = currentStrings().safFolderFallback) {
         safNavStack.clear()
         safNavStack += BreadcrumbSegment(title = title, path = uri.toString(), safUri = uri)
         loadDirectory(uri.toString(), uri)
@@ -255,7 +264,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                             rawItems = emptyList(),
                             displayedItems = emptyList(),
                             isLoading = false,
-                            errorMessage = err.message ?: "تعذر فتح المجلد"
+                            errorMessage = err.message ?: currentStrings().errOpenFolder
                         )
                     }
                 }
@@ -266,7 +275,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     private fun buildPathBreadcrumbs(path: String): List<BreadcrumbSegment> {
         val internalRoot = fileRepository.getInternalRootPath()
         if (path == internalRoot || path.startsWith("$internalRoot/")) {
-            val list = mutableListOf(BreadcrumbSegment("الذاكرة الداخلية", internalRoot))
+            val list = mutableListOf(BreadcrumbSegment(currentStrings().rootInternal, internalRoot))
             val rel = path.removePrefix(internalRoot).trim('/')
             if (rel.isNotEmpty()) {
                 var acc = internalRoot
@@ -360,7 +369,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                     if (item.sizeBytes in 1..2_000_000) {
                         _uiState.update { s -> s.copy(activeViewer = ActiveViewer.DocumentViewer(item)) }
                     } else {
-                        showSnackbar("لا يوجد تطبيق مناسب لفتح هذا النوع من الملفات")
+                        showSnackbar(currentStrings().errNoAppForFile)
                     }
                 }
             }
@@ -382,56 +391,60 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun createFolder(name: String) {
         val state = _uiState.value
+        val s = currentStrings()
         viewModelScope.launch {
             fileRepository.createFolder(state.currentPath, state.currentSafUri, name).fold(
                 onSuccess = {
-                    showSnackbar("تم إنشاء المجلد بنجاح")
+                    showSnackbar(s.msgFolderCreated)
                     refreshCurrentDirectory()
                 },
-                onFailure = { showSnackbar(it.message ?: "تعذر إنشاء المجلد") }
+                onFailure = { showSnackbar(it.message ?: s.errCreateFolder) }
             )
         }
     }
 
     fun createFile(name: String, openAfterCreate: Boolean = false) {
         val state = _uiState.value
+        val s = currentStrings()
         viewModelScope.launch {
             fileRepository.createFile(state.currentPath, state.currentSafUri, name).fold(
                 onSuccess = { created ->
-                    showSnackbar("تم إنشاء الملف بنجاح")
+                    showSnackbar(s.msgFileCreated)
                     refreshCurrentDirectory()
                     if (openAfterCreate) {
                         openFileItem(created)
                     }
                 },
-                onFailure = { showSnackbar(it.message ?: "تعذر إنشاء الملف") }
+                onFailure = { showSnackbar(it.message ?: s.errCreateFile) }
             )
         }
     }
 
     fun renameItem(item: FileItem, newName: String) {
+        val s = currentStrings()
         viewModelScope.launch {
             fileRepository.renameItem(item, newName).fold(
                 onSuccess = {
                     clearSelection()
-                    showSnackbar("تمت إعادة التسمية")
+                    showSnackbar(s.msgRenamed)
                     refreshCurrentDirectory()
                 },
-                onFailure = { showSnackbar(it.message ?: "فشل إعادة التسمية") }
+                onFailure = { showSnackbar(it.message ?: s.errRename) }
             )
         }
     }
 
     fun copyToClipboard(items: List<FileItem>, action: ClipboardAction) {
         if (items.isEmpty()) return
+        val s = currentStrings()
         _uiState.update {
             it.copy(
                 clipboard = ClipboardState(items = items, action = action),
                 selectedIds = emptySet(),
                 snackbarMessage = if (action == ClipboardAction.COPY) {
-                    "تم نسخ ${items.size} إلى الحافظة"
+                    s.msgCopiedToClipboard(items.size)
                 } else {
-                    "تم قص ${items.size} إلى الحافظة"
+                    s.msgCutToClipboard(items.size)
                 }
             )
         }
@@ -465,12 +478,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             }.fold(
                 onSuccess = {
                     _uiState.update { it.copy(clipboard = null, operationProgress = null) }
-                    showSnackbar(if (isMove) "تم النقل بنجاح" else "تم النسخ بنجاح")
+                    showSnackbar(if (isMove) currentStrings().msgMovedSuccess else currentStrings().msgCopiedSuccess)
                     refreshCurrentDirectory()
                 },
                 onFailure = { err ->
                     _uiState.update { it.copy(operationProgress = null) }
-                    showSnackbar(err.message ?: "فشلت العملية")
+                    showSnackbar(err.message ?: currentStrings().errOperationFailed)
                 }
             )
         }
@@ -478,13 +491,14 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun requestMoveToFolder(items: List<FileItem>) {
         if (items.isEmpty()) return
+        val s = currentStrings()
         _uiState.update {
             it.copy(
                 folderPicker = FolderPickerRequest(
-                    title = "اختر مجلد النقل",
-                    confirmLabel = "نقل إلى هنا",
+                    title = s.chooseMoveFolder,
+                    confirmLabel = s.moveHere,
                     onConfirm = { destPath, destSafUri ->
-                        _uiState.update { s -> s.copy(folderPicker = null, selectedIds = emptySet()) }
+                        _uiState.update { st -> st.copy(folderPicker = null, selectedIds = emptySet()) }
                         runOperation {
                             fileRepository.copyOrMoveItems(
                                 items = items,
@@ -492,16 +506,16 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                                 destSafUri = destSafUri,
                                 isMove = true
                             ) { progress ->
-                                _uiState.update { s -> s.copy(operationProgress = progress) }
+                                _uiState.update { st -> st.copy(operationProgress = progress) }
                             }.fold(
                                 onSuccess = {
-                                    _uiState.update { s -> s.copy(operationProgress = null) }
-                                    showSnackbar("تم النقل بنجاح")
+                                    _uiState.update { st -> st.copy(operationProgress = null) }
+                                    showSnackbar(currentStrings().msgMovedSuccess)
                                     refreshCurrentDirectory()
                                 },
                                 onFailure = { err ->
-                                    _uiState.update { s -> s.copy(operationProgress = null) }
-                                    showSnackbar(err.message ?: "فشل النقل")
+                                    _uiState.update { st -> st.copy(operationProgress = null) }
+                                    showSnackbar(err.message ?: currentStrings().errMoveFailed)
                                 }
                             )
                         }
@@ -519,12 +533,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             }.fold(
                 onSuccess = {
                     _uiState.update { it.copy(operationProgress = null, selectedIds = emptySet()) }
-                    showSnackbar("تم الحذف بنجاح")
+                    showSnackbar(currentStrings().msgDeletedSuccess)
                     refreshCurrentDirectory()
                 },
                 onFailure = { err ->
                     _uiState.update { it.copy(operationProgress = null) }
-                    showSnackbar(err.message ?: "فشل الحذف")
+                    showSnackbar(err.message ?: currentStrings().errDeleteFailed)
                 }
             )
         }
@@ -544,12 +558,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
             }.fold(
                 onSuccess = {
                     _uiState.update { it.copy(operationProgress = null, selectedIds = emptySet()) }
-                    showSnackbar("تم ضغط الأرشيف بنجاح")
+                    showSnackbar(currentStrings().msgCompressedSuccess)
                     refreshCurrentDirectory()
                 },
                 onFailure = { err ->
                     _uiState.update { it.copy(operationProgress = null) }
-                    showSnackbar(err.message ?: "فشل ضغط الأرشيف")
+                    showSnackbar(err.message ?: currentStrings().errCompressFailed)
                 }
             )
         }
@@ -564,7 +578,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 },
                 onFailure = { err ->
                     _uiState.update { it.copy(isZipLoading = false, zipPreviewItem = null) }
-                    showSnackbar(err.message ?: "تعذر قراءة الأرشيف")
+                    showSnackbar(err.message ?: currentStrings().errInspectZipFailed)
                 }
             )
         }
@@ -576,25 +590,26 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun requestExtractZip(zipItem: FileItem) {
         dismissZipPreview()
+        val s = currentStrings()
         _uiState.update {
             it.copy(
                 folderPicker = FolderPickerRequest(
-                    title = "اختر مسار استخراج الأرشيف",
-                    confirmLabel = "استخراج هنا",
+                    title = s.chooseExtractFolder,
+                    confirmLabel = s.extractHere,
                     onConfirm = { destPath, destSafUri ->
-                        _uiState.update { s -> s.copy(folderPicker = null) }
+                        _uiState.update { st -> st.copy(folderPicker = null) }
                         runOperation {
                             archiveManager.extractZip(zipItem, destPath, destSafUri) { progress ->
-                                _uiState.update { s -> s.copy(operationProgress = progress) }
+                                _uiState.update { st -> st.copy(operationProgress = progress) }
                             }.fold(
                                 onSuccess = {
-                                    _uiState.update { s -> s.copy(operationProgress = null) }
-                                    showSnackbar("تم استخراج الأرشيف بنجاح")
+                                    _uiState.update { st -> st.copy(operationProgress = null) }
+                                    showSnackbar(currentStrings().msgExtractedSuccess)
                                     refreshCurrentDirectory()
                                 },
                                 onFailure = { err ->
-                                    _uiState.update { s -> s.copy(operationProgress = null) }
-                                    showSnackbar(err.message ?: "فشل استخراج الأرشيف")
+                                    _uiState.update { st -> st.copy(operationProgress = null) }
+                                    showSnackbar(err.message ?: currentStrings().errExtractFailed)
                                 }
                             )
                         }
@@ -617,7 +632,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
                 },
                 onFailure = { err ->
                     _uiState.update { it.copy(isApkLoading = false) }
-                    showSnackbar(err.message ?: "تعذر تحليل ملف APK")
+                    showSnackbar(err.message ?: currentStrings().errInspectApkFailed)
                 }
             )
         }
@@ -629,12 +644,12 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     fun installApk(metadata: ApkMetadata) {
         if (!apkInspector.canRequestPackageInstalls()) {
-            showSnackbar("يرجى تفعيل صلاحية تثبيت التطبيقات من هذا المصدر")
+            showSnackbar(currentStrings().msgAllowApkInstall)
             apkInspector.openInstallPermissionSettings()
             return
         }
         apkInspector.launchInstaller(metadata).onFailure {
-            showSnackbar("تعذر تشغيل مثبت الحزم")
+            showSnackbar(currentStrings().errLaunchInstaller)
         }
     }
 
@@ -649,7 +664,7 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
     fun cancelActiveOperation() {
         activeOperationJob?.cancel()
         activeOperationJob = null
-        _uiState.update { it.copy(operationProgress = null, snackbarMessage = "تم إلغاء العملية") }
+        _uiState.update { it.copy(operationProgress = null, snackbarMessage = currentStrings().msgOperationCancelled) }
         refreshCurrentDirectory()
     }
 

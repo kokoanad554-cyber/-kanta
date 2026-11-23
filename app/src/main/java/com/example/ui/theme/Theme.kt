@@ -18,26 +18,37 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import com.example.localization.LocalAppStrings
+import com.example.localization.stringsForLanguage
 import com.example.model.AppColorPalette
+import com.example.model.AppLanguage
 import com.example.model.FontScaleOption
+import com.example.model.ListDensity
 import com.example.model.ThemeMode
+import com.example.ui.components.LocalExpressiveAnimations
+import com.example.ui.components.LocalHapticEnabled
 
 val LocalFontScale = staticCompositionLocalOf { 1.0f }
+val LocalListDensity = staticCompositionLocalOf { ListDensity.COMFORTABLE }
 
 val KantaShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(34.dp)
 )
 
 @Composable
 fun KantaFilesTheme(
+    language: AppLanguage = AppLanguage.ARABIC,
     themeMode: ThemeMode = ThemeMode.DARK,
     dynamicColor: Boolean = true,
     colorPalette: AppColorPalette = AppColorPalette.DESERT_GOLD,
     fontScaleOption: FontScaleOption = FontScaleOption.MEDIUM,
+    listDensity: ListDensity = ListDensity.COMFORTABLE,
+    expressiveAnimations: Boolean = true,
+    hapticFeedback: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -67,11 +78,17 @@ fun KantaFilesTheme(
         }
     }
 
+    val layoutDirection = if (language == AppLanguage.ARABIC) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val strings = stringsForLanguage(language)
     val typography = buildAppTypography(fontScaleOption.scale)
 
     CompositionLocalProvider(
-        LocalLayoutDirection provides LayoutDirection.Rtl,
-        LocalFontScale provides fontScaleOption.scale
+        LocalLayoutDirection provides layoutDirection,
+        LocalAppStrings provides strings,
+        LocalFontScale provides fontScaleOption.scale,
+        LocalListDensity provides listDensity,
+        LocalExpressiveAnimations provides expressiveAnimations,
+        LocalHapticEnabled provides hapticFeedback
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

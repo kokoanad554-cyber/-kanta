@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -71,7 +70,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.FileRepository
+import com.example.localization.LocalAppStrings
 import com.example.model.FileItem
+import com.example.ui.components.Tactile3DSurface
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import kotlinx.coroutines.launch
 
@@ -84,6 +85,7 @@ fun HtmlEditorScreen(
     onClose: () -> Unit,
     onShowMessage: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val scope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
@@ -106,12 +108,12 @@ fun HtmlEditorScreen(
                 codeValue = TextFieldValue(content)
                 isLoading = false
                 if (truncated) {
-                    onShowMessage("الملف كبير جداً، تم تحميل الجزء الأول فقط حفاظاً على الأداء")
+                    onShowMessage(strings.docLargeTruncated)
                 }
             },
             onFailure = { err ->
                 isLoading = false
-                onShowMessage(err.message ?: "تعذر قراءة ملف HTML")
+                onShowMessage(err.message ?: strings.unknownLabel)
                 onClose()
             }
         )
@@ -148,11 +150,11 @@ fun HtmlEditorScreen(
                 onSuccess = {
                     originalContent = codeValue.text
                     isSaving = false
-                    onShowMessage("تم حفظ الملف بأمان")
+                    onShowMessage(strings.save)
                 },
                 onFailure = { err ->
                     isSaving = false
-                    onShowMessage(err.message ?: "فشل حفظ الملف")
+                    onShowMessage(err.message ?: strings.unknownLabel)
                 }
             )
         }
@@ -179,7 +181,6 @@ fun HtmlEditorScreen(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Top Editor Toolbar
             Surface(
                 shape = RoundedCornerShape(22.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -194,18 +195,22 @@ fun HtmlEditorScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        IconButton(
+                        Tactile3DSurface(
                             onClick = {
                                 if (hasUnsavedChanges) showUnsavedDialog = true else onClose()
                             },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            restingCornerRadius = 16.dp,
+                            pressedCornerRadius = 10.dp,
+                            bevelDepth = 2.5.dp,
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(44.dp)
                                 .testTag("html_editor_back")
                         ) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "رجوع")
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -217,9 +222,9 @@ fun HtmlEditorScreen(
                             )
                             Text(
                                 text = when {
-                                    isPreviewMode -> "معاينة حية للصفحة"
-                                    hasUnsavedChanges -> "تعديلات غير محفوظة"
-                                    else -> "محرر HTML"
+                                    isPreviewMode -> strings.htmlLivePreviewMode
+                                    hasUnsavedChanges -> strings.htmlUnsavedChanges
+                                    else -> strings.htmlEditorMode
                                 },
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (hasUnsavedChanges) {
@@ -231,45 +236,69 @@ fun HtmlEditorScreen(
                         }
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         if (!isPreviewMode) {
                             IconButton(
                                 onClick = { showSearchBar = !showSearchBar },
                                 modifier = Modifier.testTag("html_editor_search_toggle")
                             ) {
-                                Icon(Icons.Rounded.Search, contentDescription = "بحث في الكود")
+                                Icon(Icons.Rounded.Search, contentDescription = strings.search)
                             }
                         }
-                        IconButton(
+                        Tactile3DSurface(
                             onClick = { isPreviewMode = !isPreviewMode },
-                            modifier = Modifier.testTag("html_editor_preview_toggle")
+                            containerColor = if (isPreviewMode) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = if (isPreviewMode) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            restingCornerRadius = 16.dp,
+                            pressedCornerRadius = 10.dp,
+                            bevelDepth = 2.5.dp,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .testTag("html_editor_preview_toggle")
                         ) {
                             Icon(
                                 imageVector = if (isPreviewMode) Icons.Rounded.Code else Icons.Rounded.Visibility,
-                                contentDescription = if (isPreviewMode) "العودة للكود" else "معاينة حية",
-                                tint = if (isPreviewMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                contentDescription = strings.htmlLivePreviewMode,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(
+                        Tactile3DSurface(
                             onClick = { saveDocument() },
                             enabled = !isSaving && !isLoading,
-                            modifier = Modifier.testTag("html_editor_save")
+                            containerColor = if (hasUnsavedChanges) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = if (hasUnsavedChanges) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            restingCornerRadius = 16.dp,
+                            pressedCornerRadius = 10.dp,
+                            bevelDepth = 2.5.dp,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .testTag("html_editor_save")
                         ) {
-                            Icon(
-                                Icons.Rounded.Save,
-                                contentDescription = "حفظ",
-                                tint = if (hasUnsavedChanges) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
+                            Icon(Icons.Rounded.Save, contentDescription = strings.save, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
 
-            // Collapsible Find & Replace Bar
             AnimatedVisibility(visible = showSearchBar && !isPreviewMode) {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
@@ -291,7 +320,7 @@ fun HtmlEditorScreen(
                                     searchQuery = it
                                     activeMatchIndex = 0
                                 },
-                                placeholder = { Text("بحث في الكود...") },
+                                placeholder = { Text(strings.htmlSearchCodeHint) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f)
                             )
@@ -300,10 +329,10 @@ fun HtmlEditorScreen(
                                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily)
                             )
                             IconButton(onClick = { jumpToMatch(activeMatchIndex - 1) }) {
-                                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "السابق")
+                                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null)
                             }
                             IconButton(onClick = { jumpToMatch(activeMatchIndex + 1) }) {
-                                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "التالي")
+                                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null)
                             }
                         }
                         Row(
@@ -313,7 +342,7 @@ fun HtmlEditorScreen(
                             OutlinedTextField(
                                 value = replaceQuery,
                                 onValueChange = { replaceQuery = it },
-                                placeholder = { Text("استبدال بـ...") },
+                                placeholder = { Text(strings.htmlReplaceWithHint) },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f)
                             )
@@ -327,14 +356,13 @@ fun HtmlEditorScreen(
                             ) {
                                 Icon(Icons.Rounded.FindReplace, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("الكل")
+                                Text(strings.htmlReplaceAll)
                             }
                         }
                     }
                 }
             }
 
-            // Main Editor / Preview Surface
             Surface(
                 shape = RoundedCornerShape(22.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -389,7 +417,6 @@ fun HtmlEditorScreen(
                                 .verticalScroll(vScroll)
                                 .padding(vertical = 12.dp)
                         ) {
-                            // Line numbers gutter
                             Column(
                                 modifier = Modifier
                                     .widthIn(min = 44.dp)
@@ -410,7 +437,6 @@ fun HtmlEditorScreen(
 
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            // Code editing area
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -440,18 +466,18 @@ fun HtmlEditorScreen(
             onDismissRequest = { showUnsavedDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             shape = RoundedCornerShape(24.dp),
-            title = { Text("تعديلات غير محفوظة") },
-            text = { Text("هل تريد حفظ التعديلات على ${item.name} قبل الخروج؟") },
+            title = { Text(strings.htmlUnsavedDialogTitle) },
+            text = { Text(strings.htmlUnsavedDialogBody(item.name)) },
             confirmButton = {
                 Button(onClick = {
                     showUnsavedDialog = false
                     scope.launch {
                         fileRepository.writeTextSafely(item, codeValue.text)
-                        onShowMessage("تم حفظ الملف")
+                        onShowMessage(strings.save)
                         onClose()
                     }
                 }) {
-                    Text("حفظ وخروج")
+                    Text(strings.htmlSaveAndExit)
                 }
             },
             dismissButton = {
@@ -460,10 +486,10 @@ fun HtmlEditorScreen(
                         showUnsavedDialog = false
                         onClose()
                     }) {
-                        Text("تجاهل", color = MaterialTheme.colorScheme.error)
+                        Text(strings.htmlDiscard, color = MaterialTheme.colorScheme.error)
                     }
                     TextButton(onClick = { showUnsavedDialog = false }) {
-                        Text("إلغاء")
+                        Text(strings.cancel)
                     }
                 }
             }

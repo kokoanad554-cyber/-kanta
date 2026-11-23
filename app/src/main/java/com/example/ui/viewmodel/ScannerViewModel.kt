@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.FileRepository
 import com.example.data.FileScanner
 import com.example.data.PreferencesRepository
+import com.example.localization.AppStrings
+import com.example.localization.stringsForLanguage
 import com.example.model.FileItem
 import com.example.model.FileOperationProgress
 import kotlinx.coroutines.Job
@@ -18,10 +20,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class ScanScope(val labelAr: String) {
-    ALL_INTERNAL("كامل الذاكرة الداخلية"),
-    DOWNLOADS("مجلد التنزيلات"),
-    DOCUMENTS("مجلد المستندات")
+enum class ScanScope {
+    ALL_INTERNAL,
+    DOWNLOADS,
+    DOCUMENTS
 }
 
 data class ScannerUiState(
@@ -54,6 +56,9 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
     val presetExtensions = listOf("html", "txt", "apk", "zip", "pdf", "json", "xml", "log", "mp3", "mp4")
 
+    private suspend fun currentStrings(): AppStrings =
+        stringsForLanguage(preferencesRepository.preferencesFlow.first().language)
+
     fun togglePresetExtension(ext: String) {
         _uiState.update { state ->
             val updated = if (ext in state.selectedPresetExtensions) {
@@ -83,7 +88,10 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
 
         val targetExtensions = state.selectedPresetExtensions + customExts
         if (targetExtensions.isEmpty()) {
-            _uiState.update { it.copy(snackbarMessage = "اختر امتداداً واحداً على الأقل للفحص") }
+            viewModelScope.launch {
+                val s = currentStrings()
+                _uiState.update { it.copy(snackbarMessage = s.scannerSelectOneExt) }
+            }
             return
         }
 
@@ -96,6 +104,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             val prefs = preferencesRepository.preferencesFlow.first()
+            val s = stringsForLanguage(prefs.language)
             _uiState.update {
                 it.copy(
                     isScanning = true,
@@ -115,7 +124,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.update {
                     it.copy(
                         isScanning = false,
-                        snackbarMessage = err.message ?: "حدث خطأ أثناء الفحص"
+                        snackbarMessage = err.message ?: s.scannerError
                     )
                 }
             }.collect { update ->
@@ -134,7 +143,10 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     fun stopScan() {
         scanJob?.cancel()
         scanJob = null
-        _uiState.update { it.copy(isScanning = false, currentDirectoryLabel = "تم إيقاف الفحص") }
+        viewModelScope.launch {
+            val s = currentStrings()
+            _uiState.update { it.copy(isScanning = false, currentDirectoryLabel = s.scannerStoppedLabel) }
+        }
     }
 
     fun toggleSelection(item: FileItem) {
@@ -161,6 +173,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     fun deleteItems(items: List<FileItem>) {
         if (items.isEmpty()) return
         viewModelScope.launch {
+            val s = currentStrings()
             fileRepository.deleteItems(items) { progress ->
                 _uiState.update { it.copy(operationProgress = progress) }
             }.fold(
@@ -171,7 +184,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                             operationProgress = null,
                             results = state.results.filterNot { it.id in deletedIds },
                             selectedIds = state.selectedIds - deletedIds,
-                            snackbarMessage = "تم حذف ${items.size} ملف"
+                            snackbarMessage = s.scannerDeletedCount(items.size)
                         )
                     }
                 },
@@ -179,7 +192,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                     _uiState.update {
                         it.copy(
                             operationProgress = null,
-                            snackbarMessage = err.message ?: "فشل الحذف"
+                            snackbarMessage = err.message ?: s.errDeleteFailed
                         )
                     }
                 }
@@ -190,6 +203,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
     fun moveItems(items: List<FileItem>, destPath: String, destSafUri: android.net.Uri?) {
         if (items.isEmpty()) return
         viewModelScope.launch {
+            val s = currentStrings()
             fileRepository.copyOrMoveItems(
                 items = items,
                 destPath = destPath,
@@ -205,7 +219,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                             operationProgress = null,
                             results = state.results.filterNot { it.id in movedIds },
                             selectedIds = state.selectedIds - movedIds,
-                            snackbarMessage = "تم نقل ${items.size} ملف بنجاح"
+                            snackbarMessage = s.scannerMovedCount(items.size)
                         )
                     }
                 },
@@ -213,7 +227,7 @@ class ScannerViewModel(application: Application) : AndroidViewModel(application)
                     _uiState.update {
                         it.copy(
                             operationProgress = null,
-                            snackbarMessage = err.message ?: "فشل النقل"
+                            snackbarMessage = err.message ?: s.errMoveFailed
                         )
                     }
                 }

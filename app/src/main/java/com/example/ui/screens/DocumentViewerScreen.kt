@@ -9,7 +9,6 @@ import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -43,7 +41,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,11 +65,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.FileRepository
+import com.example.localization.LocalAppStrings
 import com.example.model.FileCategory
 import com.example.model.FileItem
+import com.example.ui.components.Tactile3DSurface
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.ReadexProFontFamily
-import com.example.util.FormatUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -135,12 +133,14 @@ private fun ColumnScope.TextDocumentView(
     onClose: () -> Unit,
     onShowMessage: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
+    val appDir = LocalLayoutDirection.current
     var isLoading by remember { mutableStateOf(true) }
     var lines by remember { mutableStateOf<List<String>>(emptyList()) }
     var fullText by remember { mutableStateOf("") }
     var isTruncated by remember { mutableStateOf(false) }
     var showLineNumbers by remember { mutableStateOf(item.category == FileCategory.CODE) }
-    var forceLtr by remember { mutableStateOf(item.category == FileCategory.CODE) }
+    var forceLtr by remember { mutableStateOf(item.category == FileCategory.CODE || appDir == LayoutDirection.Ltr) }
     var showSearch by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
@@ -155,7 +155,7 @@ private fun ColumnScope.TextDocumentView(
             },
             onFailure = { err ->
                 isLoading = false
-                onShowMessage(err.message ?: "تعذر قراءة المستند")
+                onShowMessage(err.message ?: strings.unknownLabel)
                 onClose()
             }
         )
@@ -171,7 +171,6 @@ private fun ColumnScope.TextDocumentView(
         }
     }
 
-    // Header
     Surface(
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -186,15 +185,20 @@ private fun ColumnScope.TextDocumentView(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                IconButton(
+                Tactile3DSurface(
                     onClick = onClose,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    restingCornerRadius = 16.dp,
+                    pressedCornerRadius = 10.dp,
+                    bevelDepth = 2.5.dp,
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(44.dp)
                         .testTag("doc_viewer_back")
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "رجوع")
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -205,7 +209,7 @@ private fun ColumnScope.TextDocumentView(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${FormatUtils.formatBytes(item.sizeBytes)} • ${lines.size} سطر",
+                        text = "${strings.formatBytes(item.sizeBytes)} • ${strings.docLinesCount(lines.size)}",
                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -213,24 +217,24 @@ private fun ColumnScope.TextDocumentView(
             }
             Row {
                 IconButton(onClick = { showSearch = !showSearch }) {
-                    Icon(Icons.Rounded.Search, contentDescription = "بحث")
+                    Icon(Icons.Rounded.Search, contentDescription = strings.search)
                 }
                 IconButton(onClick = { showLineNumbers = !showLineNumbers }) {
                     Icon(
                         Icons.Rounded.FormatListNumbered,
-                        contentDescription = "ترقيم الأسطر",
+                        contentDescription = null,
                         tint = if (showLineNumbers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                 }
                 IconButton(onClick = { forceLtr = !forceLtr }) {
-                    Icon(Icons.Rounded.SwapHoriz, contentDescription = "اتجاه النص")
+                    Icon(Icons.Rounded.SwapHoriz, contentDescription = null)
                 }
                 IconButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText(item.name, fullText))
-                    onShowMessage("تم نسخ النص")
+                    onShowMessage(strings.docTextCopied)
                 }) {
-                    Icon(Icons.Rounded.ContentCopy, contentDescription = "نسخ النص")
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = strings.copy)
                 }
             }
         }
@@ -240,7 +244,7 @@ private fun ColumnScope.TextDocumentView(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("تصفية الأسطر بالكلمة...") },
+            placeholder = { Text(strings.docFilterLinesHint) },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
@@ -253,7 +257,7 @@ private fun ColumnScope.TextDocumentView(
             color = MaterialTheme.colorScheme.tertiaryContainer
         ) {
             Text(
-                text = "الملف كبير جداً؛ يتم عرض أول 500 ألف حرف للحفاظ على سلاسة الأداء.",
+                text = strings.docLargeTruncated,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onTertiaryContainer,
                 modifier = Modifier
@@ -323,6 +327,7 @@ private fun ColumnScope.PdfDocumentView(
     onClose: () -> Unit,
     onShowMessage: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     val context = LocalContext.current
     var pages by remember { mutableStateOf<List<ImageBitmap>>(emptyList()) }
     var totalPages by remember { mutableStateOf(0) }
@@ -369,7 +374,7 @@ private fun ColumnScope.PdfDocumentView(
             },
             onFailure = {
                 isLoading = false
-                onShowMessage("تعذر عرض ملف PDF")
+                onShowMessage(strings.unknownLabel)
                 fileRepository.openExternally(item)
                 onClose()
             }
@@ -387,9 +392,20 @@ private fun ColumnScope.PdfDocumentView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "رجوع")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Tactile3DSurface(
+                    onClick = onClose,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    restingCornerRadius = 16.dp,
+                    pressedCornerRadius = 10.dp,
+                    bevelDepth = 2.5.dp,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
                 }
                 Column {
                     Text(
@@ -400,14 +416,14 @@ private fun ColumnScope.PdfDocumentView(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "مستند PDF • $totalPages صفحة",
+                        text = strings.docPdfPages(totalPages),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             IconButton(onClick = { fileRepository.openExternally(item) }) {
-                Icon(Icons.Rounded.OpenInNew, contentDescription = "فتح خارجي")
+                Icon(Icons.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
             }
         }
     }
@@ -436,12 +452,12 @@ private fun ColumnScope.PdfDocumentView(
                         Column {
                             Image(
                                 bitmap = pageBitmap,
-                                contentDescription = "صفحة ${index + 1}",
+                                contentDescription = strings.docPdfPageOf(index + 1, totalPages),
                                 contentScale = ContentScale.FillWidth,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             Text(
-                                text = "صفحة ${index + 1} من $totalPages",
+                                text = strings.docPdfPageOf(index + 1, totalPages),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(8.dp)
@@ -460,6 +476,7 @@ private fun ColumnScope.ImageDocumentView(
     fileRepository: FileRepository,
     onClose: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     val modelData: Any = item.safUri ?: File(item.path)
@@ -475,9 +492,20 @@ private fun ColumnScope.ImageDocumentView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "رجوع")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Tactile3DSurface(
+                    onClick = onClose,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    restingCornerRadius = 16.dp,
+                    pressedCornerRadius = 10.dp,
+                    bevelDepth = 2.5.dp,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
                 }
                 Text(
                     text = item.name,
@@ -488,7 +516,7 @@ private fun ColumnScope.ImageDocumentView(
                 )
             }
             IconButton(onClick = { fileRepository.openExternally(item) }) {
-                Icon(Icons.Rounded.OpenInNew, contentDescription = "فتح خارجي")
+                Icon(Icons.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
             }
         }
     }

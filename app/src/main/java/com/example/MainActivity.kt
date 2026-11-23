@@ -5,8 +5,14 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -27,6 +33,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.localization.LocalAppStrings
 import com.example.ui.components.ApkPreviewSheet
 import com.example.ui.components.AppDestination
 import com.example.ui.components.BottomEdgeFadeScrim
@@ -89,11 +96,16 @@ fun KantaFilesRootApp(
     }
 
     KantaFilesTheme(
+        language = prefs.language,
         themeMode = prefs.themeMode,
         dynamicColor = prefs.useDynamicColors,
         colorPalette = prefs.colorPalette,
-        fontScaleOption = prefs.fontScale
+        fontScaleOption = prefs.fontScale,
+        listDensity = prefs.listDensity,
+        expressiveAnimations = prefs.expressiveAnimations,
+        hapticFeedback = prefs.hapticFeedback
     ) {
+        val strings = LocalAppStrings.current
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -110,6 +122,23 @@ fun KantaFilesRootApp(
                     NavHost(
                         navController = navController,
                         startDestination = AppDestination.FILES.route,
+                        enterTransition = {
+                            if (prefs.expressiveAnimations) {
+                                fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                                    scaleIn(initialScale = 0.96f, animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)) +
+                                    slideInHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { it / 16 }
+                            } else {
+                                fadeIn()
+                            }
+                        },
+                        exitTransition = {
+                            if (prefs.expressiveAnimations) {
+                                fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
+                                    slideOutHorizontally { -it / 16 }
+                            } else {
+                                fadeOut()
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     ) {
                         composable(AppDestination.FILES.route) {
@@ -142,7 +171,7 @@ fun KantaFilesRootApp(
                     TopEdgeFadeScrim(modifier = Modifier.align(Alignment.TopCenter))
                     BottomEdgeFadeScrim(modifier = Modifier.align(Alignment.BottomCenter))
 
-                    // Solid Material 3 Floating Capsule Navigation Bar
+                    // Solid Material 3 Expressive 3D Floating Capsule Navigation Bar
                     FloatingCapsuleNavBar(
                         currentRoute = currentRoute,
                         onNavigate = { destination ->
@@ -159,11 +188,14 @@ fun KantaFilesRootApp(
                 }
             }
 
-            // Fullscreen Editors & Viewers Overlay
+            // Fullscreen Editors & Viewers Overlay with spring scale/fade
             AnimatedVisibility(
                 visible = explorerState.activeViewer != null,
-                enter = fadeIn(),
-                exit = fadeOut()
+                enter = fadeIn() + scaleIn(
+                    initialScale = 0.94f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                ),
+                exit = fadeOut() + scaleOut(targetScale = 0.95f)
             ) {
                 when (val viewer = explorerState.activeViewer) {
                     is ActiveViewer.HtmlEditor -> {
@@ -223,7 +255,7 @@ fun KantaFilesRootApp(
                     onOpenInHtmlEditor = { explorerViewModel.openInHtmlEditor(it) },
                     onOpenExternal = {
                         explorerViewModel.fileRepository.openExternally(it).onFailure {
-                            explorerViewModel.showSnackbar("لا يوجد تطبيق مناسب لفتح هذا الملف")
+                            explorerViewModel.showSnackbar(strings.unknownLabel)
                         }
                     }
                 )

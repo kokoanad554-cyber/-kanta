@@ -22,8 +22,8 @@ object FormatUtils {
         return "$formatted ${units[digitGroups]}"
     }
 
-    fun formatDate(millis: Long): String {
-        if (millis <= 0L) return "غير معروف"
+    fun formatDate(millis: Long, unknownLabel: String = "غير معروف"): String {
+        if (millis <= 0L) return unknownLabel
         return dateFormatter.format(Date(millis))
     }
 

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,14 +25,12 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Html
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.InstallMobile
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.OpenInNew
@@ -70,12 +69,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.FileRepository
+import com.example.localization.LocalAppStrings
 import com.example.model.ApkMetadata
 import com.example.model.ArchiveEntryInfo
 import com.example.model.FileItem
 import com.example.model.FileOperationProgress
 import com.example.model.SortOption
 import com.example.model.StorageRoot
+import com.example.model.StorageRootType
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.util.FormatUtils
 import kotlinx.coroutines.launch
@@ -85,18 +86,19 @@ fun CreateFolderDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var name by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(26.dp),
         icon = { Icon(Icons.Rounded.CreateNewFolder, contentDescription = null) },
-        title = { Text("إنشاء مجلد جديد") },
+        title = { Text(strings.createFolderTitle) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("اسم المجلد") },
+                label = { Text(strings.folderNameLabel) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -109,11 +111,11 @@ fun CreateFolderDialog(
                 enabled = name.isNotBlank(),
                 modifier = Modifier.testTag("create_folder_confirm")
             ) {
-                Text("إنشاء")
+                Text(strings.create)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("إلغاء") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
@@ -124,6 +126,7 @@ fun CreateFileDialog(
     onDismiss: () -> Unit,
     onConfirm: (fileName: String, openAfter: Boolean) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var baseName by remember { mutableStateOf("") }
     var selectedExt by remember { mutableStateOf(".txt") }
     val presets = listOf(".txt", ".html", ".json", ".md", ".xml", "")
@@ -131,22 +134,22 @@ fun CreateFileDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(26.dp),
         icon = { Icon(Icons.Rounded.InsertDriveFile, contentDescription = null) },
-        title = { Text("إنشاء ملف جديد") },
+        title = { Text(strings.createFileTitle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = baseName,
                     onValueChange = { baseName = it },
-                    label = { Text("اسم الملف") },
+                    label = { Text(strings.fileNameLabel) },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("create_file_input")
                 )
                 Text(
-                    text = "الامتداد السريع",
+                    text = strings.quickExtension,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -158,7 +161,7 @@ fun CreateFileDialog(
                         FilterChip(
                             selected = selectedExt == ext,
                             onClick = { selectedExt = ext },
-                            label = { Text(if (ext.isEmpty()) "بدون إضافة" else ext) }
+                            label = { Text(if (ext.isEmpty()) strings.noExtension else ext) }
                         )
                     }
                 }
@@ -178,11 +181,11 @@ fun CreateFileDialog(
                 enabled = baseName.isNotBlank(),
                 modifier = Modifier.testTag("create_file_confirm")
             ) {
-                Text("إنشاء")
+                Text(strings.create)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("إلغاء") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
@@ -193,17 +196,18 @@ fun RenameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var name by remember(currentName) { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(24.dp),
-        title = { Text("إعادة التسمية") },
+        shape = RoundedCornerShape(26.dp),
+        title = { Text(strings.renameTitle) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("الاسم الجديد") },
+                label = { Text(strings.newNameLabel) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -213,11 +217,11 @@ fun RenameDialog(
                 onClick = { if (name.isNotBlank()) onConfirm(name) },
                 enabled = name.isNotBlank() && name.trim() != currentName
             ) {
-                Text("حفظ")
+                Text(strings.save)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("إلغاء") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
@@ -229,10 +233,11 @@ fun DeleteConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(26.dp),
         icon = {
             Icon(
                 Icons.Rounded.DeleteOutline,
@@ -240,13 +245,13 @@ fun DeleteConfirmDialog(
                 tint = MaterialTheme.colorScheme.error
             )
         },
-        title = { Text("تأكيد الحذف") },
+        title = { Text(strings.confirmDeleteTitle) },
         text = {
             Text(
                 if (count == 1 && singleName != null) {
-                    "هل تريد حذف \"$singleName\" نهائياً؟ لا يمكن التراجع عن هذا الإجراء."
+                    strings.confirmDeleteSingle(singleName)
                 } else {
-                    "هل تريد حذف ${FormatUtils.formatCountItems(count)} نهائياً؟ لا يمكن التراجع عن هذا الإجراء."
+                    strings.confirmDeleteMulti(strings.itemCountText(count))
                 }
             )
         },
@@ -259,11 +264,11 @@ fun DeleteConfirmDialog(
                 ),
                 modifier = Modifier.testTag("confirm_delete_button")
             ) {
-                Text("حذف")
+                Text(strings.delete)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("إلغاء") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
@@ -274,18 +279,19 @@ fun CompressZipDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var name by remember(suggestedName) { mutableStateOf(suggestedName) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(26.dp),
         icon = { Icon(Icons.Rounded.Archive, contentDescription = null) },
-        title = { Text("ضغط إلى أرشيف ZIP") },
+        title = { Text(strings.compressDialogTitle) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("اسم الأرشيف") },
+                label = { Text(strings.archiveNameLabel) },
                 suffix = { Text(".zip") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -296,11 +302,11 @@ fun CompressZipDialog(
                 onClick = { if (name.isNotBlank()) onConfirm(name) },
                 enabled = name.isNotBlank()
             ) {
-                Text("بدء الضغط")
+                Text(strings.startCompress)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("إلغاء") }
+            TextButton(onClick = onDismiss) { Text(strings.cancel) }
         }
     )
 }
@@ -310,15 +316,16 @@ fun FileOperationProgressDialog(
     progress: FileOperationProgress,
     onCancel: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     AlertDialog(
         onDismissRequest = {},
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = RoundedCornerShape(24.dp),
-        title = { Text(progress.opType.titleAr) },
+        shape = RoundedCornerShape(26.dp),
+        title = { Text(strings.opTitle(progress.opType)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = progress.currentFileName.ifEmpty { "جاري المعالجة..." },
+                    text = progress.currentFileName.ifEmpty { strings.processing },
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -342,7 +349,7 @@ fun FileOperationProgressDialog(
                         )
                         if (progress.totalBytes > 0L) {
                             Text(
-                                text = "${FormatUtils.formatBytes(progress.processedBytes)} / ${FormatUtils.formatBytes(progress.totalBytes)}",
+                                text = "${strings.formatBytes(progress.processedBytes)} / ${strings.formatBytes(progress.totalBytes)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontFamily = JetBrainsMonoFontFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -360,7 +367,7 @@ fun FileOperationProgressDialog(
         },
         confirmButton = {
             TextButton(onClick = onCancel) {
-                Text("إلغاء العملية", color = MaterialTheme.colorScheme.error)
+                Text(strings.cancelOperation, color = MaterialTheme.colorScheme.error)
             }
         }
     )
@@ -375,6 +382,7 @@ fun FileDetailsSheet(
     onOpenInHtmlEditor: (FileItem) -> Unit,
     onOpenExternal: (FileItem) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -401,7 +409,7 @@ fun FileDetailsSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = fileCategoryVisual(item.category).labelAr,
+                        text = strings.categoryLabel(item.category),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -410,22 +418,22 @@ fun FileDetailsSheet(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            DetailRow("المسار", item.path, mono = true)
+            DetailRow(strings.pathLabel, item.path, mono = true)
             if (!item.isDirectory) {
-                DetailRow("الحجم", FormatUtils.formatBytes(item.sizeBytes), mono = true)
+                DetailRow(strings.sizeLabel, strings.formatBytes(item.sizeBytes), mono = true)
             } else if (item.childCount != null) {
-                DetailRow("المحتوى", FormatUtils.formatCountItems(item.childCount))
+                DetailRow(strings.contentLabel, strings.itemCountText(item.childCount))
             }
-            DetailRow("آخر تعديل", FormatUtils.formatDate(item.lastModifiedMillis), mono = true)
+            DetailRow(strings.modifiedLabel, FormatUtils.formatDate(item.lastModifiedMillis, strings.unknownLabel), mono = true)
             DetailRow(
-                "الصلاحيات",
+                strings.permissionsLabel,
                 buildString {
-                    append(if (item.canRead) "قابل للقراءة" else "غير مقروء")
+                    append(if (item.canRead) strings.readable else strings.unreadable)
                     append(" • ")
-                    append(if (item.canWrite) "قابل للتعديل" else "للقراءة فقط")
+                    append(if (item.canWrite) strings.writable else strings.readOnly)
                 }
             )
-            DetailRow("الحالة", if (item.isHidden) "ملف مخفي" else "ظاهر")
+            DetailRow(strings.statusLabel, if (item.isHidden) strings.hiddenFile else strings.visibleFile)
 
             if (!item.isDirectory) {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -442,7 +450,7 @@ fun FileDetailsSheet(
                     ) {
                         Icon(Icons.Rounded.Description, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("عرض كنص")
+                        Text(strings.openAsText)
                     }
                     OutlinedButton(
                         onClick = {
@@ -453,19 +461,30 @@ fun FileDetailsSheet(
                     ) {
                         Icon(Icons.Rounded.Html, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("محرر HTML")
+                        Text(strings.htmlEditor)
                     }
                 }
-                Button(
+                Tactile3DSurface(
                     onClick = {
                         onDismiss()
                         onOpenExternal(item)
                     },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("فتح بتطبيق خارجي")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.openExternal, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -510,6 +529,7 @@ fun ApkPreviewSheet(
     onDismiss: () -> Unit,
     onInstall: (ApkMetadata) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -535,7 +555,7 @@ fun ApkPreviewSheet(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         CircularProgressIndicator()
-                        Text("جاري تحليل حزمة APK واستخراج البيانات...")
+                        Text(strings.analyzingApk)
                     }
                 }
             } else {
@@ -545,7 +565,7 @@ fun ApkPreviewSheet(
                 ) {
                     Surface(
                         modifier = Modifier.size(68.dp),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = ScallopedCookieShape(lobes = 10, depthFraction = 0.08f),
                         color = MaterialTheme.colorScheme.surfaceContainerHighest
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -554,7 +574,7 @@ fun ApkPreviewSheet(
                                     bitmap = metadata.icon,
                                     contentDescription = metadata.appName,
                                     modifier = Modifier
-                                        .size(56.dp)
+                                        .size(52.dp)
                                         .clip(RoundedCornerShape(14.dp))
                                 )
                             } else {
@@ -590,13 +610,13 @@ fun ApkPreviewSheet(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     ApkStatPill(
-                        label = "الإصدار",
+                        label = strings.versionLabel,
                         value = "${metadata.versionName} (${metadata.versionCode})",
                         modifier = Modifier.weight(1f)
                     )
                     ApkStatPill(
-                        label = "الحجم",
-                        value = FormatUtils.formatBytes(metadata.fileSizeBytes),
+                        label = strings.sizeLabel,
+                        value = strings.formatBytes(metadata.fileSizeBytes),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -607,12 +627,12 @@ fun ApkPreviewSheet(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         ApkStatPill(
-                            label = "الحد الأدنى (Min SDK)",
+                            label = strings.minSdkLabel,
                             value = metadata.minSdk?.toString() ?: "-",
                             modifier = Modifier.weight(1f)
                         )
                         ApkStatPill(
-                            label = "الهدف (Target SDK)",
+                            label = strings.targetSdkLabel,
                             value = metadata.targetSdk?.toString() ?: "-",
                             modifier = Modifier.weight(1f)
                         )
@@ -621,7 +641,8 @@ fun ApkPreviewSheet(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
@@ -629,18 +650,28 @@ fun ApkPreviewSheet(
                             .weight(1f)
                             .heightIn(min = 48.dp)
                     ) {
-                        Text("إغلاق")
+                        Text(strings.close)
                     }
-                    Button(
+                    Tactile3DSurface(
                         onClick = { onInstall(metadata) },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier
                             .weight(1.4f)
-                            .heightIn(min = 48.dp)
                             .testTag("apk_install_button")
                     ) {
-                        Icon(Icons.Rounded.InstallMobile, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("تثبيت التطبيق")
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .padding(horizontal = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.InstallMobile, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(strings.installApp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -684,6 +715,7 @@ fun ZipPreviewSheet(
     onDismiss: () -> Unit,
     onExtractClick: (FileItem) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -710,7 +742,7 @@ fun ZipPreviewSheet(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${FormatUtils.formatBytes(zipItem.sizeBytes)} • ${FormatUtils.formatCountItems(entries.size)}",
+                        text = "${strings.formatBytes(zipItem.sizeBytes)} • ${strings.itemCountText(entries.size)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -736,7 +768,7 @@ fun ZipPreviewSheet(
                 ) {
                     if (entries.isEmpty()) {
                         Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-                            Text("الأرشيف فارغ")
+                            Text(strings.archiveEmpty)
                         }
                     } else {
                         LazyColumn(
@@ -766,7 +798,7 @@ fun ZipPreviewSheet(
                                     )
                                     if (!entry.isDirectory && entry.sizeBytes > 0L) {
                                         Text(
-                                            text = FormatUtils.formatBytes(entry.sizeBytes),
+                                            text = strings.formatBytes(entry.sizeBytes),
                                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -780,7 +812,8 @@ fun ZipPreviewSheet(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedButton(
                     onClick = onDismiss,
@@ -788,18 +821,28 @@ fun ZipPreviewSheet(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                 ) {
-                    Text("إغلاق")
+                    Text(strings.close)
                 }
-                Button(
+                Tactile3DSurface(
                     onClick = { onExtractClick(zipItem) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier
                         .weight(1.4f)
-                        .heightIn(min = 48.dp)
                         .testTag("extract_zip_button")
                 ) {
-                    Icon(Icons.Rounded.Unarchive, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("استخراج إلى مسار...")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Unarchive, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(strings.extractToPath, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -819,6 +862,7 @@ fun FolderPickerSheet(
     onDismiss: () -> Unit,
     onConfirm: (destPath: String, destSafUri: Uri?) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var currentPath by remember { mutableStateOf(initialPath) }
     var currentSafUri by remember { mutableStateOf(initialSafUri) }
     val safStack = remember { mutableStateListOf<Pair<String, Uri>>() }
@@ -878,25 +922,29 @@ fun FolderPickerSheet(
                             }
                         }
                     ) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "رجوع")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back)
                     }
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
                 Row {
                     IconButton(onClick = { showNewFolderDialog = true }) {
-                        Icon(Icons.Rounded.CreateNewFolder, contentDescription = "مجلد جديد")
+                        Icon(Icons.Rounded.CreateNewFolder, contentDescription = strings.newFolder)
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Rounded.Close, contentDescription = "إغلاق")
+                        Icon(Icons.Rounded.Close, contentDescription = strings.close)
                     }
                 }
             }
 
-            // Quick roots row
-            androidx.compose.foundation.lazy.LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(storageRoots) { root ->
+                    val rootLabel = when (root.type) {
+                        StorageRootType.INTERNAL -> strings.rootInternal
+                        StorageRootType.DOWNLOADS -> strings.rootDownloads
+                        StorageRootType.DOCUMENTS -> strings.rootDocuments
+                        StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
+                        StorageRootType.SAF_TREE -> root.title
+                    }
                     FilterChip(
                         selected = currentPath == root.path,
                         onClick = {
@@ -911,7 +959,7 @@ fun FolderPickerSheet(
                                 currentSafUri = null
                             }
                         },
-                        label = { Text(root.title) }
+                        label = { Text(rootLabel) }
                     )
                 }
             }
@@ -944,7 +992,7 @@ fun FolderPickerSheet(
                 } else if (folders.isEmpty()) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            "لا توجد مجلدات فرعية",
+                            strings.noSubfolders,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -986,13 +1034,20 @@ fun FolderPickerSheet(
                 }
             }
 
-            Button(
+            Tactile3DSurface(
                 onClick = { onConfirm(currentPath, currentSafUri) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 50.dp)
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(confirmLabel)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 50.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(confirmLabel, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

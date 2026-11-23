@@ -2,7 +2,11 @@ package com.example
 
 import com.example.data.FileRepository
 import com.example.data.FileScanner
+import com.example.localization.stringsForLanguage
+import com.example.model.AppLanguage
 import com.example.model.FileCategory
+import com.example.model.ListDensity
+import com.example.model.UserPreferences
 import com.example.util.FormatUtils
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.test.runTest
@@ -33,6 +37,35 @@ class FileEngineUnitTest {
         assertEquals("512 ب", FormatUtils.formatBytes(512L))
         assertEquals("1.0 ك.ب", FormatUtils.formatBytes(1024L))
         assertEquals("2.0 م.ب", FormatUtils.formatBytes(2L * 1024 * 1024))
+    }
+
+    @Test
+    fun `trilingual AppStrings returns localized titles and byte units`() {
+        val ar = stringsForLanguage(AppLanguage.ARABIC)
+        val en = stringsForLanguage(AppLanguage.ENGLISH)
+        val zh = stringsForLanguage(AppLanguage.CHINESE)
+
+        assertEquals("Kanta ملفات", ar.appTitle)
+        assertEquals("Kanta Files", en.appTitle)
+        assertEquals("Kanta 文件", zh.appTitle)
+
+        assertEquals("الملفات", ar.tabFiles)
+        assertEquals("Files", en.tabFiles)
+        assertEquals("文件", zh.tabFiles)
+
+        assertEquals("1.0 ك.ب", ar.formatBytes(1024L))
+        assertEquals("1.0 KB", en.formatBytes(1024L))
+        assertEquals("1.0 KB", zh.formatBytes(1024L))
+    }
+
+    @Test
+    fun `default user preferences use fixed creator handle and 3d expressive settings`() {
+        val defaults = UserPreferences()
+        assertEquals("ak.v911", defaults.creatorHandle)
+        assertEquals(AppLanguage.ARABIC, defaults.language)
+        assertEquals(ListDensity.COMFORTABLE, defaults.listDensity)
+        assertTrue(defaults.expressiveAnimations)
+        assertTrue(defaults.hapticFeedback)
     }
 
     @Test
