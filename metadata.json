@@ -1,0 +1,6 @@
+{
+  "name": "Kanta ملفات",
+  "description": "مدير ملفات أندرويد متكامل باللغة العربية بتصميم Material 3 مع فاحص امتدادات ذكي، محرر HTML بالمعاينة الحية، معاينة APK، وضغط وفك ضغط الأرشيفات.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

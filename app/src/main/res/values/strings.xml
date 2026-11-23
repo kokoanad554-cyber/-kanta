@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Kanta ملفات</string>
+    <string name="tab_files">الملفات</string>
+    <string name="tab_scanner">الفاحص الذكي</string>
+    <string name="tab_settings">الإعدادات</string>
+    <string name="creator_section_title">صانع التطبيق</string>
+    <string name="creator_tiktok_handle">ak.911</string>
+</resources>
