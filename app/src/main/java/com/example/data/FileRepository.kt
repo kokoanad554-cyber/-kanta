@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.storage.StorageManager
 import android.webkit.MimeTypeMap
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -122,6 +123,48 @@ class FileRepository(private val context: Context) {
                         path = docs.absolutePath,
                         type = StorageRootType.DOCUMENTS
                     )
+                }
+            }
+
+            // Detect removable USB drives / external SD cards (essential on Android TV)
+            runCatching {
+                val addedPaths = HashSet<String>().apply { add(internalPath) }
+                val storageManager = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager
+                if (storageManager != null) {
+                    storageManager.storageVolumes.forEachIndexed { idx, volume ->
+                        if (volume.isRemovable && volume.state == Environment.MEDIA_MOUNTED) {
+                            val dir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                volume.directory
+                            } else {
+                                null
+                            }
+                            if (dir != null && dir.exists() && dir.canRead() && addedPaths.add(dir.absolutePath)) {
+                                roots += StorageRoot(
+                                    id = "usb_vol_$idx",
+                                    title = volume.getDescription(context)?.takeIf { it.isNotBlank() } ?: dir.name,
+                                    path = dir.absolutePath,
+                                    type = StorageRootType.EXTERNAL_USB
+                                )
+                            }
+                        }
+                    }
+                }
+                // Fallback mount scan for older TV firmware under /storage/*
+                val storageDir = File("/storage")
+                storageDir.listFiles()?.forEachIndexed { idx, entry ->
+                    if (entry.isDirectory &&
+                        entry.name != "emulated" &&
+                        entry.name != "self" &&
+                        entry.canRead() &&
+                        addedPaths.add(entry.absolutePath)
+                    ) {
+                        roots += StorageRoot(
+                            id = "usb_mnt_$idx",
+                            title = entry.name,
+                            path = entry.absolutePath,
+                            type = StorageRootType.EXTERNAL_USB
+                        )
+                    }
                 }
             }
 

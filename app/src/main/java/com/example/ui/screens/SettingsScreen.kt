@@ -6,9 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,7 +89,10 @@ import com.example.model.SortOption
 import com.example.model.ThemeMode
 import com.example.model.UserPreferences
 import com.example.ui.components.CookieShape10
+import com.example.ui.components.ExpressiveIconButton
 import com.example.ui.components.ExpressiveSurface
+import com.example.ui.components.LocalIsTvMode
+import com.example.ui.components.LocalUseSideNavRail
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.paletteColorScheme
 import com.example.ui.viewmodel.SettingsViewModel
@@ -99,15 +107,17 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val strings = LocalAppStrings.current
+    val isTvMode = LocalIsTvMode.current
+    val useSideRail = LocalUseSideNavRail.current
     var showEditHandleDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 8.dp,
-            bottom = 148.dp
+            start = if (isTvMode) 22.dp else 16.dp,
+            end = if (isTvMode) 28.dp else 16.dp,
+            top = if (isTvMode) 16.dp else 8.dp,
+            bottom = if (useSideRail) 36.dp else 148.dp
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -187,11 +197,15 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        IconButton(onClick = { showEditHandleDialog = true }) {
+                        ExpressiveIconButton(
+                            onClick = { showEditHandleDialog = true },
+                            size = 48.dp,
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
                             Icon(
                                 Icons.Rounded.Edit,
-                                contentDescription = strings.creatorEditHandleTitle,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                contentDescription = strings.creatorEditHandleTitle
                             )
                         }
                     }
@@ -400,12 +414,35 @@ fun SettingsScreen(
                 ) {
                     ListDensity.entries.forEach { density ->
                         val selected = preferences.listDensity == density
-                        FilterChip(
-                            selected = selected,
+                        ExpressiveSurface(
                             onClick = { viewModel.setListDensity(density) },
-                            label = { Text(strings.densityLabel(density)) },
+                            containerColor = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            restingCornerRadius = 18.dp,
+                            pressedCornerRadius = 10.dp,
                             modifier = Modifier.weight(1f)
-                        )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = strings.densityLabel(density),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -424,15 +461,33 @@ fun SettingsScreen(
                 )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ThemeMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = preferences.themeMode == mode,
+                        val selected = preferences.themeMode == mode
+                        ExpressiveSurface(
                             onClick = { viewModel.setThemeMode(mode) },
-                            label = { Text(strings.themeLabel(mode)) },
+                            containerColor = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            restingCornerRadius = 18.dp,
+                            pressedCornerRadius = 10.dp,
                             modifier = Modifier.testTag("theme_mode_${mode.name}")
-                        )
+                        ) {
+                            Text(
+                                text = strings.themeLabel(mode),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                            )
+                        }
                     }
                 }
 
@@ -523,15 +578,33 @@ fun SettingsScreen(
             ) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FontScaleOption.entries.forEach { option ->
-                        FilterChip(
-                            selected = preferences.fontScale == option,
+                        val selected = preferences.fontScale == option
+                        ExpressiveSurface(
                             onClick = { viewModel.setFontScale(option) },
-                            label = { Text(strings.fontScaleLabel(option)) },
+                            containerColor = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            restingCornerRadius = 18.dp,
+                            pressedCornerRadius = 10.dp,
                             modifier = Modifier.testTag("font_scale_${option.name}")
-                        )
+                        ) {
+                            Text(
+                                text = strings.fontScaleLabel(option),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                            )
+                        }
                     }
                 }
                 Surface(
@@ -603,14 +676,32 @@ fun SettingsScreen(
                 }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     SortOption.entries.forEach { option ->
-                        FilterChip(
-                            selected = preferences.defaultSortOption == option,
+                        val selected = preferences.defaultSortOption == option
+                        ExpressiveSurface(
                             onClick = { viewModel.setDefaultSortOption(option) },
-                            label = { Text(strings.sortLabel(option)) }
-                        )
+                            containerColor = if (selected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            },
+                            contentColor = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            restingCornerRadius = 18.dp,
+                            pressedCornerRadius = 10.dp
+                        ) {
+                            Text(
+                                text = strings.sortLabel(option),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                            )
+                        }
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -675,11 +766,15 @@ fun SettingsScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
-                            IconButton(onClick = { viewModel.removeSafTreeUri(uriStr) }) {
+                            ExpressiveIconButton(
+                                onClick = { viewModel.removeSafTreeUri(uriStr) },
+                                size = 48.dp,
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.error
+                            ) {
                                 Icon(
                                     Icons.Rounded.DeleteOutline,
-                                    contentDescription = strings.delete,
-                                    tint = MaterialTheme.colorScheme.error
+                                    contentDescription = strings.delete
                                 )
                             }
                         }
@@ -772,12 +867,34 @@ private fun SettingsSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     testTag: String? = null
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val focusBorderColor by animateColorAsState(
+        targetValue = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = tween(120),
+        label = "switch_row_border"
+    )
+    val rowShape = RoundedCornerShape(14.dp)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp),
+            .clip(rowShape)
+            .background(
+                if (isFocused) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent
+            )
+            .then(
+                if (isFocused) {
+                    Modifier.border(BorderStroke(2.dp, focusBorderColor), rowShape)
+                } else {
+                    Modifier
+                }
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.material3.ripple()
+            ) { onCheckedChange(!checked) }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {

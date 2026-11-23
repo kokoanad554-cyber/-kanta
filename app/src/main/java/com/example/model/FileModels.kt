@@ -47,6 +47,7 @@ enum class StorageRootType {
     INTERNAL,
     DOWNLOADS,
     DOCUMENTS,
+    EXTERNAL_USB,
     SYSTEM,
     SAF_TREE
 }

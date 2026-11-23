@@ -9,6 +9,8 @@ import android.os.ParcelFileDescriptor
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -46,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +57,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -70,9 +79,11 @@ import com.example.model.FileCategory
 import com.example.model.FileItem
 import com.example.ui.components.ExpressiveIconButton
 import com.example.ui.components.ExpressiveWavyProgressIndicator
+import com.example.ui.components.LocalIsTvMode
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.ReadexProFontFamily
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -86,6 +97,7 @@ fun DocumentViewerScreen(
     onShowMessage: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val isTvMode = LocalIsTvMode.current
     BackHandler { onClose() }
 
     Surface(
@@ -97,7 +109,10 @@ fun DocumentViewerScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = if (isTvMode) 28.dp else 12.dp,
+                    vertical = if (isTvMode) 20.dp else 8.dp
+                ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             when (item.category) {
@@ -280,11 +295,33 @@ private fun ColumnScope.TextDocumentView(
             }
         } else {
             val textFont = if (item.category == FileCategory.CODE) JetBrainsMonoFontFamily else ReadexProFontFamily
+            val docListState = rememberLazyListState()
+            val docScope = rememberCoroutineScope()
             CompositionLocalProvider(
                 LocalLayoutDirection provides if (forceLtr) LayoutDirection.Ltr else LayoutDirection.Rtl
             ) {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    state = docListState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .focusable()
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown) {
+                                when (keyEvent.key) {
+                                    Key.DirectionDown, Key.PageDown -> {
+                                        docScope.launch { docListState.animateScrollBy(260f) }
+                                        true
+                                    }
+                                    Key.DirectionUp, Key.PageUp -> {
+                                        docScope.launch { docListState.animateScrollBy(-260f) }
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            } else {
+                                false
+                            }
+                        },
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
@@ -440,7 +477,30 @@ private fun ColumnScope.PdfDocumentView(
                 )
             }
         } else {
+            val pdfListState = rememberLazyListState()
+            val pdfScope = rememberCoroutineScope()
             LazyColumn(
+                state = pdfListState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusable()
+                    .onPreviewKeyEvent { keyEvent ->
+                        if (keyEvent.type == KeyEventType.KeyDown) {
+                            when (keyEvent.key) {
+                                Key.DirectionDown, Key.PageDown -> {
+                                    pdfScope.launch { pdfListState.animateScrollBy(360f) }
+                                    true
+                                }
+                                Key.DirectionUp, Key.PageUp -> {
+                                    pdfScope.launch { pdfListState.animateScrollBy(-360f) }
+                                    true
+                                }
+                                else -> false
+                            }
+                        } else {
+                            false
+                        }
+                    },
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {

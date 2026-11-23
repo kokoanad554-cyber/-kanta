@@ -11,6 +11,7 @@ import com.example.model.FileOpType
 import com.example.model.FontScaleOption
 import com.example.model.ListDensity
 import com.example.model.SortOption
+import com.example.model.StorageRootType
 import com.example.model.UserPreferences
 import com.example.ui.viewmodel.ScanScope
 import com.example.util.FormatUtils
@@ -108,7 +109,8 @@ class FileEngineUnitTest {
                 s.createFolderTitle,
                 s.createFileTitle,
                 s.renameTitle,
-                s.confirmDeleteTitle
+                s.confirmDeleteTitle,
+                s.rootExternalUsb
             )
             coreStrings.forEach { text ->
                 assertTrue("Empty string in $lang", text.isNotBlank())
@@ -120,6 +122,7 @@ class FileEngineUnitTest {
             ScanScope.entries.forEach { assertTrue(s.scopeLabel(it).isNotBlank()) }
             AppColorPalette.entries.forEach { assertTrue(s.paletteLabel(it).isNotBlank()) }
             FontScaleOption.entries.forEach { assertTrue(s.fontScaleLabel(it).isNotBlank()) }
+            assertTrue(StorageRootType.entries.contains(StorageRootType.EXTERNAL_USB))
         }
 
         val ar = stringsForLanguage(AppLanguage.ARABIC)

@@ -1,8 +1,14 @@
 package com.example.ui.components
 
 import android.net.Uri
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -953,15 +959,16 @@ fun FolderPickerSheet(
 
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(storageRoots) { root ->
+                    val isRootSelected = currentPath == root.path
                     val rootLabel = when (root.type) {
                         StorageRootType.INTERNAL -> strings.rootInternal
                         StorageRootType.DOWNLOADS -> strings.rootDownloads
                         StorageRootType.DOCUMENTS -> strings.rootDocuments
+                        StorageRootType.EXTERNAL_USB -> "${strings.rootExternalUsb}: ${root.title}"
                         StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
                         StorageRootType.SAF_TREE -> root.title
                     }
-                    FilterChip(
-                        selected = currentPath == root.path,
+                    ExpressiveSurface(
                         onClick = {
                             if (root.safUri != null) {
                                 safStack.clear()
@@ -974,8 +981,26 @@ fun FolderPickerSheet(
                                 currentSafUri = null
                             }
                         },
-                        label = { Text(rootLabel) }
-                    )
+                        containerColor = if (isRootSelected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        },
+                        contentColor = if (isRootSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        restingCornerRadius = 18.dp,
+                        pressedCornerRadius = 10.dp
+                    ) {
+                        Text(
+                            text = rootLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isRootSelected) FontWeight.Bold else FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
+                        )
+                    }
                 }
             }
 
@@ -1019,11 +1044,29 @@ fun FolderPickerSheet(
                 } else {
                     LazyColumn(modifier = Modifier.padding(6.dp)) {
                         items(folders, key = { it.id }) { folder ->
+                            val rowInteraction = remember { MutableInteractionSource() }
+                            val isRowFocused by rowInteraction.collectIsFocusedAsState()
+                            val rowBorderColor by animateColorAsState(
+                                targetValue = if (isRowFocused) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                                animationSpec = tween(120),
+                                label = "picker_row_border"
+                            )
+                            val rowShape = RoundedCornerShape(12.dp)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
+                                    .clip(rowShape)
+                                    .then(
+                                        if (isRowFocused) {
+                                            Modifier.border(BorderStroke(2.dp, rowBorderColor), rowShape)
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                                    .clickable(
+                                        interactionSource = rowInteraction,
+                                        indication = androidx.compose.material3.ripple()
+                                    ) {
                                         if (folder.safUri != null) {
                                             safStack.add(folder.path to folder.safUri)
                                             currentPath = folder.path

@@ -10,9 +10,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -20,8 +22,11 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,8 +42,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -89,8 +97,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -118,6 +132,8 @@ import com.example.ui.components.ExpressiveWavyProgressIndicator
 import com.example.ui.components.FileCategoryBadge
 import com.example.ui.components.LocalExpressiveAnimations
 import com.example.ui.components.LocalHapticEnabled
+import com.example.ui.components.LocalIsTvMode
+import com.example.ui.components.LocalUseSideNavRail
 import com.example.ui.components.RenameDialog
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalListDensity
@@ -136,6 +152,8 @@ fun FileExplorerScreen(
     val strings = LocalAppStrings.current
     val expressive = LocalExpressiveAnimations.current
     val density = LocalListDensity.current
+    val isTvMode = LocalIsTvMode.current
+    val useSideRail = LocalUseSideNavRail.current
 
     var showSearch by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -193,18 +211,20 @@ fun FileExplorerScreen(
     )
 
     Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 360.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 8.dp,
-                bottom = 148.dp
+                start = if (isTvMode) 22.dp else 16.dp,
+                end = if (isTvMode) 28.dp else 16.dp,
+                top = if (isTvMode) 16.dp else 8.dp,
+                bottom = if (useSideRail) 36.dp else 148.dp
             ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 10.dp)
         ) {
             // Pure 2D Material 3 Expressive Header Card
-            item(key = "explorer_header") {
+            item(key = "explorer_header", span = { GridItemSpan(maxLineSpan) }) {
                 Spacer(modifier = Modifier.statusBarsPadding())
                 Surface(
                     shape = RoundedCornerShape(24.dp),
@@ -445,7 +465,7 @@ fun FileExplorerScreen(
 
             // Permission Request Banner
             if (!uiState.hasStoragePermission) {
-                item(key = "permission_banner") {
+                item(key = "permission_banner", span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
@@ -533,7 +553,7 @@ fun FileExplorerScreen(
             }
 
             // Storage Stats (with Google Play-style wavy progress bar) & Quick Roots Strip
-            item(key = "storage_strip") {
+            item(key = "storage_strip", span = { GridItemSpan(maxLineSpan) }) {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
                     color = MaterialTheme.colorScheme.surfaceContainer,
@@ -593,6 +613,7 @@ fun FileExplorerScreen(
                                     StorageRootType.INTERNAL -> strings.rootInternal
                                     StorageRootType.DOWNLOADS -> strings.rootDownloads
                                     StorageRootType.DOCUMENTS -> strings.rootDocuments
+                                    StorageRootType.EXTERNAL_USB -> "${strings.rootExternalUsb}: ${root.title}"
                                     StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
                                     StorageRootType.SAF_TREE -> root.title
                                 }
@@ -653,7 +674,7 @@ fun FileExplorerScreen(
 
             // Selection Action Bar
             if (uiState.isSelectionMode) {
-                item(key = "selection_bar") {
+                item(key = "selection_bar", span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
                         color = MaterialTheme.colorScheme.secondaryContainer
@@ -734,7 +755,7 @@ fun FileExplorerScreen(
 
             // Active Clipboard Bar
             if (uiState.clipboard != null) {
-                item(key = "clipboard_bar") {
+                item(key = "clipboard_bar", span = { GridItemSpan(maxLineSpan) }) {
                     val clip = uiState.clipboard
                     Surface(
                         shape = RoundedCornerShape(22.dp),
@@ -789,7 +810,7 @@ fun FileExplorerScreen(
 
             // Loading / Error / Empty / File Items
             if (uiState.isLoading) {
-                item(key = "explorer_loading") {
+                item(key = "explorer_loading", span = { GridItemSpan(maxLineSpan) }) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -803,7 +824,7 @@ fun FileExplorerScreen(
                     }
                 }
             } else if (uiState.errorMessage != null) {
-                item(key = "explorer_error") {
+                item(key = "explorer_error", span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
                         color = MaterialTheme.colorScheme.errorContainer
@@ -833,7 +854,7 @@ fun FileExplorerScreen(
                     }
                 }
             } else if (uiState.displayedItems.isEmpty()) {
-                item(key = "explorer_empty") {
+                item(key = "explorer_empty", span = { GridItemSpan(maxLineSpan) }) {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow
@@ -885,12 +906,27 @@ fun FileExplorerScreen(
         }
 
         // Pure 2D Material 3 Expressive Floating Actions with Scalloped Cookie Main FAB
+        val fabInteractionSource = remember { MutableInteractionSource() }
+        val isFabFocused by fabInteractionSource.collectIsFocusedAsState()
+        val fabFocusScale by animateFloatAsState(
+            targetValue = if (expressive && isFabFocused) 1.09f else 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            label = "fab_focus_scale"
+        )
+
         Column(
             modifier = Modifier
-                .align(Alignment.BottomStart)
+                .align(if (useSideRail) Alignment.BottomEnd else Alignment.BottomStart)
                 .navigationBarsPadding()
-                .padding(start = 20.dp, bottom = 94.dp),
-            horizontalAlignment = Alignment.Start,
+                .padding(
+                    start = if (useSideRail) 0.dp else 20.dp,
+                    end = if (useSideRail) (if (isTvMode) 32.dp else 20.dp) else 0.dp,
+                    bottom = if (useSideRail) (if (isTvMode) 28.dp else 22.dp) else 94.dp
+                ),
+            horizontalAlignment = if (useSideRail) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             AnimatedVisibility(
@@ -901,7 +937,10 @@ fun FileExplorerScreen(
                 ),
                 exit = fadeOut() + scaleOut(targetScale = 0.85f)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    horizontalAlignment = if (useSideRail) Alignment.End else Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     ExpressiveSurface(
                         onClick = {
                             showFabMenu = false
@@ -950,12 +989,26 @@ fun FileExplorerScreen(
 
             Surface(
                 onClick = { showFabMenu = !showFabMenu },
+                interactionSource = fabInteractionSource,
                 shape = CookieShape10,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = if (isFabFocused) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.primaryContainer
+                },
+                contentColor = if (isFabFocused) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                },
+                border = if (isFabFocused) BorderStroke(2.5.dp, MaterialTheme.colorScheme.onPrimary) else null,
                 tonalElevation = 6.dp,
                 modifier = Modifier
-                    .size(60.dp)
+                    .size(62.dp)
+                    .graphicsLayer {
+                        scaleX = fabFocusScale
+                        scaleY = fabFocusScale
+                    }
                     .testTag("explorer_fab_main")
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -1049,28 +1102,63 @@ private fun FileItemRow(
     onDelete: () -> Unit
 ) {
     val strings = LocalAppStrings.current
+    val expressive = LocalExpressiveAnimations.current
     val hapticEnabled = LocalHapticEnabled.current
     val haptics = LocalHapticFeedback.current
     var menuExpanded by remember { mutableStateOf(false) }
+
+    val cardInteractionSource = remember { MutableInteractionSource() }
+    val isFocused by cardInteractionSource.collectIsFocusedAsState()
+
+    val focusScale by animateFloatAsState(
+        targetValue = if (expressive && isFocused) 1.02f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "file_row_focus_scale"
+    )
+    val focusBorderColor by animateColorAsState(
+        targetValue = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = tween(durationMillis = 120),
+        label = "file_row_focus_border"
+    )
 
     val rowShape = RoundedCornerShape(if (isCompact) 14.dp else 18.dp)
 
     Surface(
         shape = rowShape,
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerLow
+        color = when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer
+            isFocused -> MaterialTheme.colorScheme.surfaceContainerHighest
+            else -> MaterialTheme.colorScheme.surfaceContainerLow
         },
         contentColor = if (isSelected) {
             MaterialTheme.colorScheme.onPrimaryContainer
         } else {
             MaterialTheme.colorScheme.onSurface
         },
+        border = if (isFocused) BorderStroke(2.5.dp, focusBorderColor) else null,
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = focusScale
+                scaleY = focusScale
+            }
             .clip(rowShape)
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyUp &&
+                    (keyEvent.key == Key.Menu || keyEvent.key == Key.ButtonY)
+                ) {
+                    menuExpanded = true
+                    true
+                } else {
+                    false
+                }
+            }
             .combinedClickable(
+                interactionSource = cardInteractionSource,
+                indication = androidx.compose.material3.ripple(),
                 onClick = onClick,
                 onLongClick = {
                     if (hapticEnabled) {
@@ -1136,18 +1224,19 @@ private fun FileItemRow(
             }
 
             Box {
-                IconButton(
+                ExpressiveIconButton(
                     onClick = { menuExpanded = true },
-                    modifier = Modifier.size(48.dp)
+                    size = 48.dp,
+                    containerColor = Color.Transparent,
+                    contentColor = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 ) {
                     Icon(
                         Icons.Rounded.MoreVert,
                         contentDescription = strings.detailsAndOpen,
-                        tint = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
                         modifier = Modifier.size(22.dp)
                     )
                 }

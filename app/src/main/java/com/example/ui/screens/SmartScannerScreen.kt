@@ -1,8 +1,16 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,11 +67,15 @@ import com.example.model.FileItem
 import com.example.model.StorageRoot
 import com.example.ui.components.CookieShape10
 import com.example.ui.components.DeleteConfirmDialog
+import com.example.ui.components.ExpressiveIconButton
 import com.example.ui.components.ExpressiveSurface
 import com.example.ui.components.ExpressiveWavyProgressIndicator
 import com.example.ui.components.FileCategoryBadge
 import com.example.ui.components.FileOperationProgressDialog
 import com.example.ui.components.FolderPickerSheet
+import com.example.ui.components.LocalExpressiveAnimations
+import com.example.ui.components.LocalIsTvMode
+import com.example.ui.components.LocalUseSideNavRail
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.viewmodel.ScanScope
 import com.example.ui.viewmodel.ScannerUiState
@@ -81,16 +95,19 @@ fun SmartScannerScreen(
     modifier: Modifier = Modifier
 ) {
     val strings = LocalAppStrings.current
+    val expressive = LocalExpressiveAnimations.current
+    val isTvMode = LocalIsTvMode.current
+    val useSideRail = LocalUseSideNavRail.current
     var pendingDeleteItems by remember { mutableStateOf<List<FileItem>?>(null) }
     var pendingMoveItems by remember { mutableStateOf<List<FileItem>?>(null) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 8.dp,
-            bottom = 148.dp
+            start = if (isTvMode) 22.dp else 16.dp,
+            end = if (isTvMode) 28.dp else 16.dp,
+            top = if (isTvMode) 16.dp else 8.dp,
+            bottom = if (useSideRail) 36.dp else 148.dp
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -199,14 +216,32 @@ fun SmartScannerScreen(
 
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ScanScope.entries.forEach { scope ->
-                            FilterChip(
-                                selected = uiState.scanScope == scope,
+                            val selected = uiState.scanScope == scope
+                            ExpressiveSurface(
                                 onClick = { scannerViewModel.setScanScope(scope) },
-                                label = { Text(strings.scopeLabel(scope)) }
-                            )
+                                containerColor = if (selected) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                },
+                                contentColor = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                restingCornerRadius = 18.dp,
+                                pressedCornerRadius = 10.dp
+                            ) {
+                                Text(
+                                    text = strings.scopeLabel(scope),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                                )
+                            }
                         }
                     }
 
@@ -403,23 +438,45 @@ fun SmartScannerScreen(
         } else {
             items(uiState.results, key = { it.id }) { item ->
                 val isSelected = item.id in uiState.selectedIds
+                val rowInteractionSource = remember { MutableInteractionSource() }
+                val isFocused by rowInteractionSource.collectIsFocusedAsState()
+                val focusScale by animateFloatAsState(
+                    targetValue = if (expressive && isFocused) 1.02f else 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "scan_row_scale"
+                )
+                val focusBorderColor by animateColorAsState(
+                    targetValue = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    animationSpec = tween(120),
+                    label = "scan_row_border"
+                )
                 val rowShape = RoundedCornerShape(18.dp)
                 Surface(
                     shape = rowShape,
-                    color = if (isSelected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerLow
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.primaryContainer
+                        isFocused -> MaterialTheme.colorScheme.surfaceContainerHighest
+                        else -> MaterialTheme.colorScheme.surfaceContainerLow
                     },
                     contentColor = if (isSelected) {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
+                    border = if (isFocused) BorderStroke(2.5.dp, focusBorderColor) else null,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .graphicsLayer {
+                            scaleX = focusScale
+                            scaleY = focusScale
+                        }
                         .clip(rowShape)
                         .combinedClickable(
+                            interactionSource = rowInteractionSource,
+                            indication = androidx.compose.material3.ripple(),
                             onClick = {
                                 if (uiState.isSelectionMode) {
                                     scannerViewModel.toggleSelection(item)
@@ -474,24 +531,26 @@ fun SmartScannerScreen(
                             )
                         }
 
-                        Row {
-                            IconButton(
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            ExpressiveIconButton(
                                 onClick = { pendingMoveItems = listOf(item) },
-                                modifier = Modifier.size(48.dp)
+                                size = 48.dp,
+                                containerColor = Color.Transparent
                             ) {
                                 Icon(
                                     Icons.AutoMirrored.Rounded.DriveFileMove,
                                     contentDescription = strings.move
                                 )
                             }
-                            IconButton(
+                            ExpressiveIconButton(
                                 onClick = { pendingDeleteItems = listOf(item) },
-                                modifier = Modifier.size(48.dp)
+                                size = 48.dp,
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.error
                             ) {
                                 Icon(
                                     Icons.Rounded.DeleteOutline,
-                                    contentDescription = strings.delete,
-                                    tint = MaterialTheme.colorScheme.error
+                                    contentDescription = strings.delete
                                 )
                             }
                         }

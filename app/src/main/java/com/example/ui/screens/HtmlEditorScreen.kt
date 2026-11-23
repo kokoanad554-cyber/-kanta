@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -73,6 +72,7 @@ import com.example.localization.LocalAppStrings
 import com.example.model.FileItem
 import com.example.ui.components.ExpressiveIconButton
 import com.example.ui.components.ExpressiveWavyProgressIndicator
+import com.example.ui.components.LocalIsTvMode
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import kotlinx.coroutines.launch
 
@@ -86,6 +86,7 @@ fun HtmlEditorScreen(
     onShowMessage: (String) -> Unit
 ) {
     val strings = LocalAppStrings.current
+    val isTvMode = LocalIsTvMode.current
     val scope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
@@ -178,7 +179,10 @@ fun HtmlEditorScreen(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = if (isTvMode) 28.dp else 12.dp,
+                    vertical = if (isTvMode) 20.dp else 8.dp
+                ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Surface(
@@ -237,11 +241,22 @@ fun HtmlEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (!isPreviewMode) {
-                            IconButton(
+                            ExpressiveIconButton(
                                 onClick = { showSearchBar = !showSearchBar },
+                                containerColor = if (showSearchBar) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                },
+                                contentColor = if (showSearchBar) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                size = 48.dp,
                                 modifier = Modifier.testTag("html_editor_search_toggle")
                             ) {
-                                Icon(Icons.Rounded.Search, contentDescription = strings.search)
+                                Icon(Icons.Rounded.Search, contentDescription = strings.search, modifier = Modifier.size(22.dp))
                             }
                         }
                         ExpressiveIconButton(
@@ -316,11 +331,19 @@ fun HtmlEditorScreen(
                                 text = if (matchIndices.isEmpty()) "0/0" else "${activeMatchIndex + 1}/${matchIndices.size}",
                                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily)
                             )
-                            IconButton(onClick = { jumpToMatch(activeMatchIndex - 1) }) {
-                                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = null)
+                            ExpressiveIconButton(
+                                onClick = { jumpToMatch(activeMatchIndex - 1) },
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                size = 48.dp
+                            ) {
+                                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = strings.search)
                             }
-                            IconButton(onClick = { jumpToMatch(activeMatchIndex + 1) }) {
-                                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null)
+                            ExpressiveIconButton(
+                                onClick = { jumpToMatch(activeMatchIndex + 1) },
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                size = 48.dp
+                            ) {
+                                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = strings.search)
                             }
                         }
                         Row(

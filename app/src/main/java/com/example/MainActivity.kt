@@ -13,6 +13,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -20,11 +23,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,8 +45,12 @@ import com.example.ui.components.FileDetailsSheet
 import com.example.ui.components.FileOperationProgressDialog
 import com.example.ui.components.FloatingCapsuleNavBar
 import com.example.ui.components.FolderPickerSheet
+import com.example.ui.components.LocalIsTvMode
+import com.example.ui.components.LocalUseSideNavRail
 import com.example.ui.components.TopEdgeFadeScrim
+import com.example.ui.components.TvSideCapsuleNavRail
 import com.example.ui.components.ZipPreviewSheet
+import com.example.ui.components.isTelevisionContext
 import com.example.ui.screens.DocumentViewerScreen
 import com.example.ui.screens.FileExplorerScreen
 import com.example.ui.screens.HtmlEditorScreen
@@ -69,6 +78,9 @@ fun KantaFilesRootApp(
     scannerViewModel: ScannerViewModel = viewModel(),
     settingsViewModel: SettingsViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val isTvDevice = remember(context) { isTelevisionContext(context) }
+
     val prefs by settingsViewModel.preferences.collectAsStateWithLifecycle()
     val explorerState by explorerViewModel.uiState.collectAsStateWithLifecycle()
     val scannerState by scannerViewModel.uiState.collectAsStateWithLifecycle()
@@ -105,87 +117,119 @@ fun KantaFilesRootApp(
         hapticFeedback = prefs.hapticFeedback
     ) {
         val strings = LocalAppStrings.current
-        Box(modifier = Modifier.fillMaxSize()) {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                snackbarHost = {
-                    SnackbarHost(
-                        hostState = snackbarHostState,
-                        modifier = Modifier
-                            .navigationBarsPadding()
-                            .padding(bottom = 92.dp, start = 16.dp, end = 16.dp)
-                    )
-                }
-            ) { _ ->
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val useSideNavRail = isTvDevice || (maxWidth >= 680.dp && maxWidth > maxHeight)
+
+            CompositionLocalProvider(
+                LocalIsTvMode provides isTvDevice,
+                LocalUseSideNavRail provides useSideNavRail
+            ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    NavHost(
-                        navController = navController,
-                        startDestination = AppDestination.FILES.route,
-                        enterTransition = {
-                            if (prefs.expressiveAnimations) {
-                                fadeIn(tween(180)) +
-                                    scaleIn(
-                                        initialScale = 0.96f,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioLowBouncy,
-                                            stiffness = Spring.StiffnessMedium
-                                        )
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        snackbarHost = {
+                            SnackbarHost(
+                                hostState = snackbarHostState,
+                                modifier = Modifier
+                                    .navigationBarsPadding()
+                                    .padding(
+                                        bottom = if (useSideNavRail) 28.dp else 92.dp,
+                                        start = 16.dp,
+                                        end = 16.dp
                                     )
-                            } else {
-                                fadeIn(tween(120))
+                            )
+                        }
+                    ) { _ ->
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            if (useSideNavRail) {
+                                TvSideCapsuleNavRail(
+                                    currentRoute = currentRoute,
+                                    onNavigate = { destination ->
+                                        if (currentRoute != destination.route) {
+                                            navController.navigate(destination.route) {
+                                                popUpTo(AppDestination.FILES.route) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                    }
+                                )
                             }
-                        },
-                        exitTransition = {
-                            fadeOut(tween(130))
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        composable(AppDestination.FILES.route) {
-                            FileExplorerScreen(
-                                uiState = explorerState,
-                                viewModel = explorerViewModel
-                            )
-                        }
-                        composable(AppDestination.SCANNER.route) {
-                            SmartScannerScreen(
-                                uiState = scannerState,
-                                scannerViewModel = scannerViewModel,
-                                confirmBatchDelete = prefs.scannerConfirmBatchDelete,
-                                showHiddenFiles = prefs.showHiddenFiles,
-                                fileRepository = explorerViewModel.fileRepository,
-                                storageRoots = explorerState.storageRoots,
-                                onOpenFile = { item -> explorerViewModel.openFileItem(item) }
-                            )
-                        }
-                        composable(AppDestination.SETTINGS.route) {
-                            SettingsScreen(
-                                preferences = prefs,
-                                viewModel = settingsViewModel,
-                                onShowMessage = { explorerViewModel.showSnackbar(it) }
-                            )
-                        }
-                    }
 
-                    // Soft gradient edge fades for status bar and floating nav bar areas
-                    TopEdgeFadeScrim(modifier = Modifier.align(Alignment.TopCenter))
-                    BottomEdgeFadeScrim(modifier = Modifier.align(Alignment.BottomCenter))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            ) {
+                                NavHost(
+                                    navController = navController,
+                                    startDestination = AppDestination.FILES.route,
+                                    enterTransition = {
+                                        if (prefs.expressiveAnimations) {
+                                            fadeIn(tween(180)) +
+                                                scaleIn(
+                                                    initialScale = 0.96f,
+                                                    animationSpec = spring(
+                                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                                        stiffness = Spring.StiffnessMedium
+                                                    )
+                                                )
+                                        } else {
+                                            fadeIn(tween(120))
+                                        }
+                                    },
+                                    exitTransition = {
+                                        fadeOut(tween(130))
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    composable(AppDestination.FILES.route) {
+                                        FileExplorerScreen(
+                                            uiState = explorerState,
+                                            viewModel = explorerViewModel
+                                        )
+                                    }
+                                    composable(AppDestination.SCANNER.route) {
+                                        SmartScannerScreen(
+                                            uiState = scannerState,
+                                            scannerViewModel = scannerViewModel,
+                                            confirmBatchDelete = prefs.scannerConfirmBatchDelete,
+                                            showHiddenFiles = prefs.showHiddenFiles,
+                                            fileRepository = explorerViewModel.fileRepository,
+                                            storageRoots = explorerState.storageRoots,
+                                            onOpenFile = { item -> explorerViewModel.openFileItem(item) }
+                                        )
+                                    }
+                                    composable(AppDestination.SETTINGS.route) {
+                                        SettingsScreen(
+                                            preferences = prefs,
+                                            viewModel = settingsViewModel,
+                                            onShowMessage = { explorerViewModel.showSnackbar(it) }
+                                        )
+                                    }
+                                }
 
-                    // Solid Material 3 Expressive 3D Floating Capsule Navigation Bar
-                    FloatingCapsuleNavBar(
-                        currentRoute = currentRoute,
-                        onNavigate = { destination ->
-                            if (currentRoute != destination.route) {
-                                navController.navigate(destination.route) {
-                                    popUpTo(AppDestination.FILES.route) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
+                                // Soft gradient edge fades
+                                TopEdgeFadeScrim(modifier = Modifier.align(Alignment.TopCenter))
+                                if (!useSideNavRail) {
+                                    BottomEdgeFadeScrim(modifier = Modifier.align(Alignment.BottomCenter))
+                                    FloatingCapsuleNavBar(
+                                        currentRoute = currentRoute,
+                                        onNavigate = { destination ->
+                                            if (currentRoute != destination.route) {
+                                                navController.navigate(destination.route) {
+                                                    popUpTo(AppDestination.FILES.route) { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.align(Alignment.BottomCenter)
+                                    )
                                 }
                             }
-                        },
-                        modifier = Modifier.align(Alignment.BottomCenter)
-                    )
-                }
-            }
+                        }
+                    }
 
             // Fullscreen Editors & Viewers Overlay with spring scale/fade
             AnimatedVisibility(
@@ -272,6 +316,8 @@ fun KantaFilesRootApp(
                     onDismiss = { explorerViewModel.dismissFolderPicker() },
                     onConfirm = request.onConfirm
                 )
+            }
+                }
             }
         }
     }

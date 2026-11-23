@@ -1,5 +1,9 @@
 package com.example.ui.components
 
+import android.app.UiModeManager
+import android.content.Context
+import android.content.res.Configuration
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -10,10 +14,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -55,6 +61,16 @@ import kotlin.math.sin
 
 val LocalExpressiveAnimations = staticCompositionLocalOf { true }
 val LocalHapticEnabled = staticCompositionLocalOf { true }
+val LocalIsTvMode = staticCompositionLocalOf { false }
+val LocalUseSideNavRail = staticCompositionLocalOf { false }
+
+fun isTelevisionContext(context: Context): Boolean = runCatching {
+    val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+    val typeMatch = uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+    val configMatch = (context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+        Configuration.UI_MODE_TYPE_TELEVISION
+    typeMatch || configMatch
+}.getOrDefault(false)
 
 /**
  * Material 3 Expressive scalloped/cookie silhouette inspired by the M3 Expressive keyboard popups.
@@ -94,7 +110,8 @@ val CookieShape10: Shape = ScallopedCookieShape(lobes = 10, depthFraction = 0.08
 /**
  * Clean 2D Material 3 Expressive interactive surface:
  * - Pure flat 2D Material 3 surface (no heavy 3D bevels or clipping artifacts)
- * - Keyboard-style pill <-> squircle corner morphing on press
+ * - Keyboard-style pill <-> squircle corner morphing on press & TV D-pad focus
+ * - High-contrast M3 focus ring & spring scale lift for Android TV remote navigation
  * - Smooth spring scale bounce + optional subtle haptic feedback
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -108,6 +125,7 @@ fun ExpressiveSurface(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     restingCornerRadius: Dp = 22.dp,
     pressedCornerRadius: Dp = 11.dp,
+    focusedCornerRadius: Dp = 15.dp,
     tonalElevation: Dp = 0.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -116,22 +134,38 @@ fun ExpressiveSurface(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
+    val targetCorner = when {
+        expressive && isPressed -> pressedCornerRadius
+        expressive && isFocused -> focusedCornerRadius
+        else -> restingCornerRadius
+    }
     val animCorner by animateDpAsState(
-        targetValue = if (expressive && isPressed) pressedCornerRadius else restingCornerRadius,
+        targetValue = targetCorner,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "m3e_corner"
     )
+    val targetScale = when {
+        expressive && isPressed -> 0.95f
+        expressive && isFocused -> 1.04f
+        else -> 1f
+    }
     val animScale by animateFloatAsState(
-        targetValue = if (expressive && isPressed) 0.95f else 1f,
+        targetValue = targetScale,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "m3e_scale"
+    )
+    val focusBorderColor by animateColorAsState(
+        targetValue = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = tween(durationMillis = 120),
+        label = "m3e_focus_border"
     )
 
     val shape = RoundedCornerShape(animCorner.coerceAtLeast(0.dp))
@@ -141,6 +175,7 @@ fun ExpressiveSurface(
         color = containerColor,
         contentColor = contentColor,
         tonalElevation = tonalElevation,
+        border = if (isFocused) BorderStroke(2.5.dp, focusBorderColor) else null,
         modifier = modifier
             .graphicsLayer {
                 scaleX = animScale
@@ -173,7 +208,7 @@ fun ExpressiveSurface(
 
 /**
  * Clean 2D circular-to-squircle Material 3 Expressive icon button (inspired by M3 Expressive keyboard keys).
- * Guaranteed >= 48.dp touch target and un-squished icon sizing.
+ * Supports both touch and Android TV D-pad focus highlight with >= 48.dp interactive target.
  */
 @Composable
 fun ExpressiveIconButton(
@@ -192,6 +227,7 @@ fun ExpressiveIconButton(
         contentColor = contentColor,
         restingCornerRadius = size / 2f,
         pressedCornerRadius = 12.dp,
+        focusedCornerRadius = 15.dp,
         modifier = modifier
             .minimumInteractiveComponentSize()
             .size(size),
