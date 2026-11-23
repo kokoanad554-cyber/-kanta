@@ -33,15 +33,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -107,6 +113,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -135,6 +142,7 @@ import com.example.ui.components.LocalHapticEnabled
 import com.example.ui.components.LocalIsTvMode
 import com.example.ui.components.LocalUseSideNavRail
 import com.example.ui.components.RenameDialog
+import com.example.ui.components.TopEdgeFadeScrim
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalListDensity
 import com.example.ui.viewmodel.ExplorerUiState
@@ -154,6 +162,14 @@ fun FileExplorerScreen(
     val density = LocalListDensity.current
     val isTvMode = LocalIsTvMode.current
     val useSideRail = LocalUseSideNavRail.current
+    val layoutDir = LocalLayoutDirection.current
+    val safeInsets = WindowInsets.safeDrawing.only(
+        if (useSideRail) {
+            WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom
+        } else {
+            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+        }
+    ).asPaddingValues()
 
     var showSearch by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -211,27 +227,21 @@ fun FileExplorerScreen(
     )
 
     Box(modifier = modifier.fillMaxSize()) {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 360.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = if (isTvMode) 22.dp else 16.dp,
-                end = if (isTvMode) 28.dp else 16.dp,
-                top = if (isTvMode) 16.dp else 8.dp,
-                bottom = if (useSideRail) 36.dp else 148.dp
-            ),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 10.dp)
-        ) {
-            // Pure 2D Material 3 Expressive Header Card
-            item(key = "explorer_header", span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(modifier = Modifier.statusBarsPadding())
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    tonalElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Pure 2D Material 3 Expressive Pinned Header Card (never clipped under notch/status bar or lost on scroll)
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                tonalElevation = 2.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = safeInsets.calculateStartPadding(layoutDir) + (if (isTvMode) 22.dp else 16.dp),
+                        end = safeInsets.calculateEndPadding(layoutDir) + (if (isTvMode) 28.dp else 16.dp),
+                        top = safeInsets.calculateTopPadding() + (if (isTvMode) 20.dp else 10.dp),
+                        bottom = 6.dp
+                    )
+            ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -461,7 +471,24 @@ fun FileExplorerScreen(
                         }
                     }
                 }
-            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 360.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = safeInsets.calculateStartPadding(layoutDir) + (if (isTvMode) 22.dp else 16.dp),
+                        end = safeInsets.calculateEndPadding(layoutDir) + (if (isTvMode) 28.dp else 16.dp),
+                        top = 6.dp,
+                        bottom = safeInsets.calculateBottomPadding() + (if (useSideRail) 36.dp else 148.dp)
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 10.dp)
+                ) {
 
             // Permission Request Banner
             if (!uiState.hasStoragePermission) {
@@ -903,6 +930,14 @@ fun FileExplorerScreen(
                     )
                 }
             }
+            }
+
+                TopEdgeFadeScrim(
+                    includeStatusBarInset = false,
+                    scrimHeight = 14.dp,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         }
 
         // Pure 2D Material 3 Expressive Floating Actions with Scalloped Cookie Main FAB
@@ -920,7 +955,9 @@ fun FileExplorerScreen(
         Column(
             modifier = Modifier
                 .align(if (useSideRail) Alignment.BottomEnd else Alignment.BottomStart)
-                .navigationBarsPadding()
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+                )
                 .padding(
                     start = if (useSideRail) 0.dp else 20.dp,
                     end = if (useSideRail) (if (isTvMode) 32.dp else 20.dp) else 0.dp,

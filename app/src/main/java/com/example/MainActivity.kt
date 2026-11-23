@@ -209,8 +209,10 @@ fun KantaFilesRootApp(
                                     }
                                 }
 
-                                // Soft gradient edge fades
-                                TopEdgeFadeScrim(modifier = Modifier.align(Alignment.TopCenter))
+                                // Soft gradient edge fades (Files screen draws its own top scrim under its pinned bar)
+                                if (currentRoute != AppDestination.FILES.route) {
+                                    TopEdgeFadeScrim(modifier = Modifier.align(Alignment.TopCenter))
+                                }
                                 if (!useSideNavRail) {
                                     BottomEdgeFadeScrim(modifier = Modifier.align(Alignment.BottomCenter))
                                     FloatingCapsuleNavBar(

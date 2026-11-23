@@ -22,13 +22,20 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -109,35 +116,46 @@ fun SettingsScreen(
     val strings = LocalAppStrings.current
     val isTvMode = LocalIsTvMode.current
     val useSideRail = LocalUseSideNavRail.current
+    val layoutDir = LocalLayoutDirection.current
+    val safeInsets = WindowInsets.safeDrawing.only(
+        if (useSideRail) {
+            WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom
+        } else {
+            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+        }
+    ).asPaddingValues()
     var showEditHandleDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = if (isTvMode) 22.dp else 16.dp,
-            end = if (isTvMode) 28.dp else 16.dp,
-            top = if (isTvMode) 16.dp else 8.dp,
-            bottom = if (useSideRail) 36.dp else 148.dp
+            start = safeInsets.calculateStartPadding(layoutDir) + (if (isTvMode) 22.dp else 16.dp),
+            end = safeInsets.calculateEndPadding(layoutDir) + (if (isTvMode) 28.dp else 16.dp),
+            top = safeInsets.calculateTopPadding() + (if (isTvMode) 20.dp else 12.dp),
+            bottom = safeInsets.calculateBottomPadding() + (if (useSideRail) 36.dp else 148.dp)
         ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Spacer(modifier = Modifier.statusBarsPadding())
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     text = strings.settingsTitle,
                     style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.wrapContentWidth(unbounded = true)
                 ) {
                     Text(
                         text = "v1.12",
@@ -146,7 +164,9 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         ),
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
             }

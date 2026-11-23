@@ -19,12 +19,18 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -57,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,21 +105,28 @@ fun SmartScannerScreen(
     val expressive = LocalExpressiveAnimations.current
     val isTvMode = LocalIsTvMode.current
     val useSideRail = LocalUseSideNavRail.current
+    val layoutDir = LocalLayoutDirection.current
+    val safeInsets = WindowInsets.safeDrawing.only(
+        if (useSideRail) {
+            WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom
+        } else {
+            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
+        }
+    ).asPaddingValues()
     var pendingDeleteItems by remember { mutableStateOf<List<FileItem>?>(null) }
     var pendingMoveItems by remember { mutableStateOf<List<FileItem>?>(null) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = if (isTvMode) 22.dp else 16.dp,
-            end = if (isTvMode) 28.dp else 16.dp,
-            top = if (isTvMode) 16.dp else 8.dp,
-            bottom = if (useSideRail) 36.dp else 148.dp
+            start = safeInsets.calculateStartPadding(layoutDir) + (if (isTvMode) 22.dp else 16.dp),
+            end = safeInsets.calculateEndPadding(layoutDir) + (if (isTvMode) 28.dp else 16.dp),
+            top = safeInsets.calculateTopPadding() + (if (isTvMode) 20.dp else 12.dp),
+            bottom = safeInsets.calculateBottomPadding() + (if (useSideRail) 36.dp else 148.dp)
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Spacer(modifier = Modifier.statusBarsPadding())
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
