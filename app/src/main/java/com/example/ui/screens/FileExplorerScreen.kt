@@ -20,8 +20,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,13 +30,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -46,6 +46,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.DriveFileMove
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.NoteAdd
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Archive
@@ -62,7 +63,6 @@ import androidx.compose.material.icons.rounded.FolderSpecial
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.NoteAdd
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Security
@@ -70,12 +70,10 @@ import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Unarchive
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -91,10 +89,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,14 +108,17 @@ import com.example.model.ListDensity
 import com.example.model.SortOption
 import com.example.model.StorageRootType
 import com.example.ui.components.CompressZipDialog
+import com.example.ui.components.CookieShape10
 import com.example.ui.components.CreateFileDialog
 import com.example.ui.components.CreateFolderDialog
 import com.example.ui.components.DeleteConfirmDialog
+import com.example.ui.components.ExpressiveIconButton
+import com.example.ui.components.ExpressiveSurface
+import com.example.ui.components.ExpressiveWavyProgressIndicator
 import com.example.ui.components.FileCategoryBadge
 import com.example.ui.components.LocalExpressiveAnimations
+import com.example.ui.components.LocalHapticEnabled
 import com.example.ui.components.RenameDialog
-import com.example.ui.components.ScallopedCookieShape
-import com.example.ui.components.Tactile3DSurface
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.LocalListDensity
 import com.example.ui.viewmodel.ExplorerUiState
@@ -200,266 +201,240 @@ fun FileExplorerScreen(
                 top = 8.dp,
                 bottom = 148.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 11.dp)
+            verticalArrangement = Arrangement.spacedBy(if (density == ListDensity.COMPACT) 8.dp else 10.dp)
         ) {
-            // Top 3D Expressive Header Card
-            item {
+            // Pure 2D Material 3 Expressive Header Card
+            item(key = "explorer_header") {
                 Spacer(modifier = Modifier.statusBarsPadding())
-                val headerBg = MaterialTheme.colorScheme.surfaceContainerLow
-                val headerBevel = remember(headerBg) { lerp(headerBg, Color.Black, 0.30f) }
-                val headerRim = remember(headerBg) { lerp(headerBg, Color.White, 0.10f) }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(headerBevel)
-                        .padding(bottom = 4.dp)
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(26.dp),
-                        color = headerBg,
-                        border = BorderStroke(1.dp, headerRim),
-                        tonalElevation = 2.dp
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    if (uiState.breadcrumbs.size > 1 || uiState.isSelectionMode) {
-                                        Tactile3DSurface(
-                                            onClick = { viewModel.navigateUp() },
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            restingCornerRadius = 18.dp,
-                                            pressedCornerRadius = 10.dp,
-                                            bevelDepth = 3.dp,
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .testTag("explorer_back_button")
-                                        ) {
-                                            Icon(
-                                                imageVector = if (uiState.isSelectionMode) {
-                                                    Icons.Rounded.Close
-                                                } else {
-                                                    Icons.AutoMirrored.Rounded.ArrowBack
-                                                },
-                                                contentDescription = strings.back
-                                            )
-                                        }
-                                    }
-                                    Column {
-                                        AnimatedContent(
-                                            targetState = if (uiState.isSelectionMode) {
-                                                strings.selectedCount(uiState.selectedIds.size)
+                                if (uiState.breadcrumbs.size > 1 || uiState.isSelectionMode) {
+                                    ExpressiveIconButton(
+                                        onClick = { viewModel.navigateUp() },
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        size = 48.dp,
+                                        modifier = Modifier.testTag("explorer_back_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = if (uiState.isSelectionMode) {
+                                                Icons.Rounded.Close
                                             } else {
-                                                val lastTitle = uiState.breadcrumbs.lastOrNull()?.title
-                                                if (uiState.breadcrumbs.size <= 1) strings.appTitle else (lastTitle ?: strings.appTitle)
+                                                Icons.AutoMirrored.Rounded.ArrowBack
                                             },
-                                            transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.94f)) togetherWith fadeOut() },
-                                            label = "header_title"
-                                        ) { titleText ->
-                                            Text(
-                                                text = titleText,
-                                                style = MaterialTheme.typography.titleLarge,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        Text(
-                                            text = strings.itemCountText(uiState.displayedItems.size),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            contentDescription = strings.back,
+                                            modifier = Modifier.size(22.dp)
                                         )
                                     }
                                 }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Tactile3DSurface(
-                                        onClick = {
-                                            showSearch = !showSearch
-                                            if (!showSearch) viewModel.updateSearchQuery("")
+                                Column(modifier = Modifier.weight(1f)) {
+                                    AnimatedContent(
+                                        targetState = if (uiState.isSelectionMode) {
+                                            strings.selectedCount(uiState.selectedIds.size)
+                                        } else {
+                                            val lastTitle = uiState.breadcrumbs.lastOrNull()?.title
+                                            if (uiState.breadcrumbs.size <= 1) strings.appTitle else (lastTitle ?: strings.appTitle)
                                         },
-                                        containerColor = if (showSearch) {
+                                        transitionSpec = {
+                                            (fadeIn() + scaleIn(initialScale = 0.96f)) togetherWith fadeOut()
+                                        },
+                                        label = "header_title"
+                                    ) { titleText ->
+                                        Text(
+                                            text = titleText,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Text(
+                                        text = strings.itemCountText(uiState.displayedItems.size),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                ExpressiveIconButton(
+                                    onClick = {
+                                        showSearch = !showSearch
+                                        if (!showSearch) viewModel.updateSearchQuery("")
+                                    },
+                                    containerColor = if (showSearch) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    },
+                                    contentColor = if (showSearch) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    size = 48.dp,
+                                    modifier = Modifier.testTag("toggle_search_button")
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Search,
+                                        contentDescription = strings.search,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+
+                                Box {
+                                    ExpressiveIconButton(
+                                        onClick = { showSortMenu = true },
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                        size = 48.dp,
+                                        modifier = Modifier.testTag("sort_menu_button")
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Rounded.Sort,
+                                            contentDescription = strings.sort,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showSortMenu,
+                                        onDismissRequest = { showSortMenu = false },
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ) {
+                                        SortOption.entries.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = strings.sortLabel(option),
+                                                        fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (uiState.sortOption == option) {
+                                                            MaterialTheme.colorScheme.primary
+                                                        } else {
+                                                            MaterialTheme.colorScheme.onSurface
+                                                        }
+                                                    )
+                                                },
+                                                onClick = {
+                                                    viewModel.updateSortOption(option)
+                                                    showSortMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                ExpressiveIconButton(
+                                    onClick = { viewModel.refreshCurrentDirectory() },
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    size = 48.dp
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Refresh,
+                                        contentDescription = strings.refresh,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = showSearch,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            OutlinedTextField(
+                                value = uiState.searchQuery,
+                                onValueChange = { viewModel.updateSearchQuery(it) },
+                                placeholder = { Text(strings.searchInFolder) },
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (uiState.searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                            Icon(Icons.Rounded.Close, contentDescription = strings.close)
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(18.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        // Expressive Breadcrumbs Pills (2D pill <-> squircle morphing)
+                        if (uiState.breadcrumbs.isNotEmpty()) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                itemsIndexed(uiState.breadcrumbs) { idx, segment ->
+                                    val isLast = idx == uiState.breadcrumbs.lastIndex
+                                    val label = if (idx == 0 && segment.safUri == null && segment.path != "/") {
+                                        strings.rootInternal
+                                    } else {
+                                        segment.title
+                                    }
+                                    ExpressiveSurface(
+                                        onClick = { viewModel.navigateToBreadcrumb(segment) },
+                                        containerColor = if (isLast) {
                                             MaterialTheme.colorScheme.primaryContainer
                                         } else {
                                             MaterialTheme.colorScheme.surfaceContainerHigh
                                         },
-                                        contentColor = if (showSearch) {
+                                        contentColor = if (isLast) {
                                             MaterialTheme.colorScheme.onPrimaryContainer
                                         } else {
                                             MaterialTheme.colorScheme.onSurface
                                         },
-                                        restingCornerRadius = 16.dp,
-                                        pressedCornerRadius = 10.dp,
-                                        bevelDepth = 2.5.dp,
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .testTag("toggle_search_button")
+                                        restingCornerRadius = 18.dp,
+                                        pressedCornerRadius = 10.dp
                                     ) {
-                                        Icon(Icons.Rounded.Search, contentDescription = strings.search, modifier = Modifier.size(20.dp))
-                                    }
-
-                                    Box {
-                                        Tactile3DSurface(
-                                            onClick = { showSortMenu = true },
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                            restingCornerRadius = 16.dp,
-                                            pressedCornerRadius = 10.dp,
-                                            bevelDepth = 2.5.dp,
-                                            modifier = Modifier
-                                                .size(44.dp)
-                                                .testTag("sort_menu_button")
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
                                         ) {
-                                            Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = strings.sort, modifier = Modifier.size(20.dp))
-                                        }
-                                        DropdownMenu(
-                                            expanded = showSortMenu,
-                                            onDismissRequest = { showSortMenu = false },
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                        ) {
-                                            SortOption.entries.forEach { option ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Text(
-                                                            text = strings.sortLabel(option),
-                                                            fontWeight = if (uiState.sortOption == option) FontWeight.Bold else FontWeight.Normal,
-                                                            color = if (uiState.sortOption == option) {
-                                                                MaterialTheme.colorScheme.primary
-                                                            } else {
-                                                                MaterialTheme.colorScheme.onSurface
-                                                            }
-                                                        )
-                                                    },
-                                                    onClick = {
-                                                        viewModel.updateSortOption(option)
-                                                        showSortMenu = false
-                                                    }
+                                            if (idx == 0) {
+                                                Icon(
+                                                    Icons.Rounded.Home,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
                                                 )
                                             }
-                                        }
-                                    }
-
-                                    Tactile3DSurface(
-                                        onClick = { safLauncher.launch(null) },
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        restingCornerRadius = 16.dp,
-                                        pressedCornerRadius = 10.dp,
-                                        bevelDepth = 2.5.dp,
-                                        modifier = Modifier
-                                            .size(44.dp)
-                                            .testTag("add_saf_folder_button")
-                                    ) {
-                                        Icon(Icons.Rounded.FolderSpecial, contentDescription = strings.addSafFolder, modifier = Modifier.size(20.dp))
-                                    }
-
-                                    Tactile3DSurface(
-                                        onClick = { viewModel.refreshCurrentDirectory() },
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        restingCornerRadius = 16.dp,
-                                        pressedCornerRadius = 10.dp,
-                                        bevelDepth = 2.5.dp,
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Icon(Icons.Rounded.Refresh, contentDescription = strings.refresh, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                            }
-
-                            AnimatedVisibility(
-                                visible = showSearch,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
-                            ) {
-                                OutlinedTextField(
-                                    value = uiState.searchQuery,
-                                    onValueChange = { viewModel.updateSearchQuery(it) },
-                                    placeholder = { Text(strings.searchInFolder) },
-                                    singleLine = true,
-                                    trailingIcon = {
-                                        if (uiState.searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                                Icon(Icons.Rounded.Close, contentDescription = strings.close)
-                                            }
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(18.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-
-                            // 3D Expressive Breadcrumbs Pills
-                            if (uiState.breadcrumbs.isNotEmpty()) {
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    itemsIndexed(uiState.breadcrumbs) { idx, segment ->
-                                        val isLast = idx == uiState.breadcrumbs.lastIndex
-                                        val label = if (idx == 0 && segment.safUri == null && segment.path != "/") {
-                                            strings.rootInternal
-                                        } else {
-                                            segment.title
-                                        }
-                                        Tactile3DSurface(
-                                            onClick = { viewModel.navigateToBreadcrumb(segment) },
-                                            containerColor = if (isLast) {
-                                                MaterialTheme.colorScheme.primaryContainer
-                                            } else {
-                                                MaterialTheme.colorScheme.surfaceContainerHigh
-                                            },
-                                            contentColor = if (isLast) {
-                                                MaterialTheme.colorScheme.onPrimaryContainer
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
-                                            },
-                                            restingCornerRadius = 16.dp,
-                                            pressedCornerRadius = 9.dp,
-                                            bevelDepth = 2.dp
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                            ) {
-                                                if (idx == 0) {
-                                                    Icon(
-                                                        Icons.Rounded.Home,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                                Text(
-                                                    text = label,
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium
-                                                )
-                                            }
-                                        }
-                                        if (!isLast) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp)
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium
                                             )
                                         }
+                                    }
+                                    if (!isLast) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                 }
                             }
@@ -470,7 +445,7 @@ fun FileExplorerScreen(
 
             // Permission Request Banner
             if (!uiState.hasStoragePermission) {
-                item {
+                item(key = "permission_banner") {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.primaryContainer
@@ -547,101 +522,116 @@ fun FileExplorerScreen(
                 }
             }
 
-            // Storage Stats & 3D Quick Roots Strip
-            item {
-                val stripColor = MaterialTheme.colorScheme.surfaceContainer
-                val stripBevel = remember(stripColor) { lerp(stripColor, Color.Black, 0.28f) }
-                val stripRim = remember(stripColor) { lerp(stripColor, Color.White, 0.08f) }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(stripBevel)
-                        .padding(bottom = 3.dp)
+            // Storage Stats (with Google Play-style wavy progress bar) & Quick Roots Strip
+            item(key = "storage_strip") {
+                Surface(
+                    shape = RoundedCornerShape(22.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(22.dp),
-                        color = stripColor,
-                        border = BorderStroke(1.dp, stripRim)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            if (uiState.storageStats.totalBytes > 0L) {
+                        if (uiState.storageStats.totalBytes > 0L) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Storage,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = strings.storageSpace,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Text(
+                                    text = strings.storageAvailableOf(
+                                        strings.formatBytes(uiState.storageStats.freeBytes),
+                                        strings.formatBytes(uiState.storageStats.totalBytes)
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            ExpressiveWavyProgressIndicator(
+                                progress = { animatedStorageFraction },
+                                animateWhenDeterminate = false,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            items(uiState.storageRoots, key = { it.id }) { root ->
+                                val isCurrent = uiState.currentPath == root.path
+                                val rootLabel = when (root.type) {
+                                    StorageRootType.INTERNAL -> strings.rootInternal
+                                    StorageRootType.DOWNLOADS -> strings.rootDownloads
+                                    StorageRootType.DOCUMENTS -> strings.rootDocuments
+                                    StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
+                                    StorageRootType.SAF_TREE -> root.title
+                                }
+                                ExpressiveSurface(
+                                    onClick = { viewModel.navigateToRoot(root) },
+                                    containerColor = if (isCurrent) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHigh
+                                    },
+                                    contentColor = if (isCurrent) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    restingCornerRadius = 20.dp,
+                                    pressedCornerRadius = 11.dp
+                                ) {
+                                    Text(
+                                        text = rootLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                                    )
+                                }
+                            }
+                            item(key = "add_saf_pill") {
+                                ExpressiveSurface(
+                                    onClick = { safLauncher.launch(null) },
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    restingCornerRadius = 20.dp,
+                                    pressedCornerRadius = 11.dp,
+                                    modifier = Modifier.testTag("add_saf_folder_button")
                                 ) {
                                     Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Icon(
-                                            Icons.Rounded.Storage,
+                                            Icons.Rounded.FolderSpecial,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
-                                            text = strings.storageSpace,
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
-                                    Text(
-                                        text = strings.storageAvailableOf(
-                                            strings.formatBytes(uiState.storageStats.freeBytes),
-                                            strings.formatBytes(uiState.storageStats.totalBytes)
-                                        ),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = JetBrainsMonoFontFamily),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                LinearProgressIndicator(
-                                    progress = { animatedStorageFraction },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                )
-                            }
-
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(uiState.storageRoots, key = { it.id }) { root ->
-                                    val isCurrent = uiState.currentPath == root.path
-                                    val rootLabel = when (root.type) {
-                                        StorageRootType.INTERNAL -> strings.rootInternal
-                                        StorageRootType.DOWNLOADS -> strings.rootDownloads
-                                        StorageRootType.DOCUMENTS -> strings.rootDocuments
-                                        StorageRootType.SYSTEM -> if (root.path == "/") strings.rootSlash else strings.rootSystem
-                                        StorageRootType.SAF_TREE -> root.title
-                                    }
-                                    Tactile3DSurface(
-                                        onClick = { viewModel.navigateToRoot(root) },
-                                        containerColor = if (isCurrent) {
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceContainerHigh
-                                        },
-                                        contentColor = if (isCurrent) {
-                                            MaterialTheme.colorScheme.onPrimaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        },
-                                        restingCornerRadius = 20.dp,
-                                        pressedCornerRadius = 11.dp,
-                                        bevelDepth = if (isCurrent) 3.dp else 2.dp
-                                    ) {
-                                        Text(
-                                            text = rootLabel,
+                                            text = strings.addSafFolder,
                                             style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                 }
@@ -653,11 +643,10 @@ fun FileExplorerScreen(
 
             // Selection Action Bar
             if (uiState.isSelectionMode) {
-                item {
+                item(key = "selection_bar") {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.animateItem()
+                        color = MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         LazyRow(
                             modifier = Modifier
@@ -735,12 +724,11 @@ fun FileExplorerScreen(
 
             // Active Clipboard Bar
             if (uiState.clipboard != null) {
-                item {
+                item(key = "clipboard_bar") {
                     val clip = uiState.clipboard
                     Surface(
                         shape = RoundedCornerShape(22.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                        modifier = Modifier.animateItem()
+                        color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
                         Row(
                             modifier = Modifier
@@ -766,10 +754,12 @@ fun FileExplorerScreen(
                                 TextButton(onClick = { viewModel.clearClipboard() }) {
                                     Text(strings.cancel)
                                 }
-                                Tactile3DSurface(
+                                ExpressiveSurface(
                                     onClick = { viewModel.pasteClipboardHere() },
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = MaterialTheme.colorScheme.onPrimary,
+                                    restingCornerRadius = 20.dp,
+                                    pressedCornerRadius = 11.dp,
                                     modifier = Modifier.testTag("paste_here_button")
                                 ) {
                                     Row(
@@ -789,18 +779,21 @@ fun FileExplorerScreen(
 
             // Loading / Error / Empty / File Items
             if (uiState.isLoading) {
-                item {
+                item(key = "explorer_loading") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 48.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        ExpressiveWavyProgressIndicator(
+                            progress = null,
+                            modifier = Modifier.widthIn(max = 220.dp)
+                        )
                     }
                 }
             } else if (uiState.errorMessage != null) {
-                item {
+                item(key = "explorer_error") {
                     Surface(
                         shape = RoundedCornerShape(22.dp),
                         color = MaterialTheme.colorScheme.errorContainer
@@ -830,7 +823,7 @@ fun FileExplorerScreen(
                     }
                 }
             } else if (uiState.displayedItems.isEmpty()) {
-                item {
+                item(key = "explorer_empty") {
                     Surface(
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLow
@@ -866,13 +859,6 @@ fun FileExplorerScreen(
                         item = item,
                         isSelected = item.id in uiState.selectedIds,
                         isCompact = density == ListDensity.COMPACT,
-                        modifier = Modifier.animateItem(
-                            fadeInSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            placementSpec = spring(
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
-                        ),
                         onClick = { viewModel.onItemClick(item) },
                         onLongClick = { viewModel.toggleSelection(item) },
                         onCopy = { viewModel.copyToClipboard(listOf(item), ClipboardAction.COPY) },
@@ -888,7 +874,7 @@ fun FileExplorerScreen(
             }
         }
 
-        // Scalloped 3D Expressive Floating Actions
+        // Pure 2D Material 3 Expressive Floating Actions with Scalloped Cookie Main FAB
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -900,13 +886,13 @@ fun FileExplorerScreen(
             AnimatedVisibility(
                 visible = showFabMenu,
                 enter = fadeIn() + scaleIn(
-                    initialScale = 0.8f,
+                    initialScale = 0.85f,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
                 ),
                 exit = fadeOut() + scaleOut(targetScale = 0.85f)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Tactile3DSurface(
+                    ExpressiveSurface(
                         onClick = {
                             showFabMenu = false
                             showCreateFolderDialog = true
@@ -915,7 +901,7 @@ fun FileExplorerScreen(
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                         restingCornerRadius = 22.dp,
                         pressedCornerRadius = 12.dp,
-                        bevelDepth = 3.dp,
+                        tonalElevation = 4.dp,
                         modifier = Modifier.testTag("fab_new_folder")
                     ) {
                         Row(
@@ -928,7 +914,7 @@ fun FileExplorerScreen(
                         }
                     }
 
-                    Tactile3DSurface(
+                    ExpressiveSurface(
                         onClick = {
                             showFabMenu = false
                             showCreateFileDialog = true
@@ -937,7 +923,7 @@ fun FileExplorerScreen(
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                         restingCornerRadius = 22.dp,
                         pressedCornerRadius = 12.dp,
-                        bevelDepth = 3.dp,
+                        tonalElevation = 4.dp,
                         modifier = Modifier.testTag("fab_new_file")
                     ) {
                         Row(
@@ -945,42 +931,31 @@ fun FileExplorerScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Rounded.NoteAdd, contentDescription = strings.newFile)
+                            Icon(Icons.AutoMirrored.Rounded.NoteAdd, contentDescription = strings.newFile)
                             Text(strings.newFile, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
 
-            // Signature Scalloped Cookie 3D FAB from the M3 Expressive video
-            val fabBg = MaterialTheme.colorScheme.primaryContainer
-            val fabBevel = remember(fabBg) { lerp(fabBg, Color.Black, 0.36f) }
-            val cookieShape = remember { ScallopedCookieShape(lobes = 10, depthFraction = 0.085f) }
-            Box(
+            Surface(
+                onClick = { showFabMenu = !showFabMenu },
+                shape = CookieShape10,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shadowElevation = 6.dp,
                 modifier = Modifier
-                    .size(64.dp)
-                    .clip(cookieShape)
-                    .background(fabBevel)
-                    .padding(bottom = 3.5.dp)
+                    .size(60.dp)
+                    .testTag("explorer_fab_main")
             ) {
-                Surface(
-                    onClick = { showFabMenu = !showFabMenu },
-                    shape = cookieShape,
-                    color = fabBg,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .size(64.dp)
-                        .testTag("explorer_fab_main")
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = strings.createItem,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .graphicsLayer { rotationZ = fabRotation }
-                        )
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = strings.createItem,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .graphicsLayer { rotationZ = fabRotation }
+                    )
                 }
             }
         }
@@ -1046,12 +1021,12 @@ fun FileExplorerScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileItemRow(
     item: FileItem,
     isSelected: Boolean,
     isCompact: Boolean,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onCopy: () -> Unit,
@@ -1064,12 +1039,15 @@ private fun FileItemRow(
     onDelete: () -> Unit
 ) {
     val strings = LocalAppStrings.current
+    val hapticEnabled = LocalHapticEnabled.current
+    val haptics = LocalHapticFeedback.current
     var menuExpanded by remember { mutableStateOf(false) }
 
-    Tactile3DSurface(
-        onClick = onClick,
-        onLongClick = onLongClick,
-        containerColor = if (isSelected) {
+    val rowShape = RoundedCornerShape(if (isCompact) 14.dp else 18.dp)
+
+    Surface(
+        shape = rowShape,
+        color = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surfaceContainerLow
@@ -1079,11 +1057,18 @@ private fun FileItemRow(
         } else {
             MaterialTheme.colorScheme.onSurface
         },
-        restingCornerRadius = if (isCompact) 16.dp else 22.dp,
-        pressedCornerRadius = 11.dp,
-        bevelDepth = if (isCompact) 2.dp else 3.5.dp,
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
+            .clip(rowShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    if (hapticEnabled) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    }
+                    onLongClick()
+                }
+            )
             .testTag("file_item_${item.name}")
     ) {
         Row(
@@ -1091,7 +1076,7 @@ private fun FileItemRow(
                 .fillMaxWidth()
                 .padding(
                     horizontal = 12.dp,
-                    vertical = if (isCompact) 7.dp else 11.dp
+                    vertical = if (isCompact) 7.dp else 10.dp
                 ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1143,7 +1128,7 @@ private fun FileItemRow(
             Box {
                 IconButton(
                     onClick = { menuExpanded = true },
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         Icons.Rounded.MoreVert,
@@ -1152,7 +1137,8 @@ private fun FileItemRow(
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                        },
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 

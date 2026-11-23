@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.Check
@@ -40,7 +40,6 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderShared
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Visibility
@@ -58,6 +57,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,13 +66,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.localization.LocalAppStrings
@@ -83,8 +84,8 @@ import com.example.model.ListDensity
 import com.example.model.SortOption
 import com.example.model.ThemeMode
 import com.example.model.UserPreferences
-import com.example.ui.components.ScallopedCookieShape
-import com.example.ui.components.Tactile3DSurface
+import com.example.ui.components.CookieShape10
+import com.example.ui.components.ExpressiveSurface
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.paletteColorScheme
 import com.example.ui.viewmodel.SettingsViewModel
@@ -142,103 +143,92 @@ fun SettingsScreen(
             }
         }
 
-        // App Creator Card FIRST at the top of Settings
+        // App Creator Card FIRST at the top of Settings (Pure 2D Material 3 Expressive)
         item {
-            val cardColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            val bevelColor = remember(cardColor) { lerp(cardColor, Color.Black, 0.36f) }
-            val rimColor = remember(cardColor) { lerp(cardColor, Color.White, 0.14f) }
-
-            Box(
+            Surface(
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 2.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .animateItem()
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(bevelColor)
-                    .padding(bottom = 4.dp)
                     .testTag("creator_section_card")
             ) {
-                Surface(
-                    shape = RoundedCornerShape(28.dp),
-                    color = cardColor,
-                    border = BorderStroke(1.dp, rimColor),
-                    tonalElevation = 4.dp,
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Surface(
+                                modifier = Modifier.size(36.dp),
+                                shape = CookieShape10,
+                                color = MaterialTheme.colorScheme.primaryContainer
                             ) {
-                                Surface(
-                                    modifier = Modifier.size(34.dp),
-                                    shape = ScallopedCookieShape(lobes = 8, depthFraction = 0.09f),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Rounded.Person,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = strings.creatorSectionTitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            IconButton(onClick = { showEditHandleDialog = true }) {
-                                Icon(
-                                    Icons.Rounded.Edit,
-                                    contentDescription = strings.creatorEditHandleTitle,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.creator_avatar),
-                                contentDescription = strings.creatorSectionTitle,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(84.dp)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .border(
-                                        width = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        shape = RoundedCornerShape(22.dp)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Rounded.Person,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(20.dp)
                                     )
+                                }
+                            }
+                            Text(
+                                text = strings.creatorSectionTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
+                        }
+                        IconButton(onClick = { showEditHandleDialog = true }) {
+                            Icon(
+                                Icons.Rounded.Edit,
+                                contentDescription = strings.creatorEditHandleTitle,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
 
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Text(
-                                    text = strings.creatorSubtitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.creator_avatar),
+                            contentDescription = strings.creatorSectionTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(82.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .border(
+                                    width = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = RoundedCornerShape(22.dp)
                                 )
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
+                        )
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = strings.creatorSubtitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                     Text(
                                         text = "TikTok: @${preferences.creatorHandle}",
                                         style = MaterialTheme.typography.labelLarge.copy(
@@ -246,81 +236,85 @@ fun SettingsScreen(
                                             fontWeight = FontWeight.Bold
                                         ),
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                     )
                                 }
-                                Text(
-                                    text = strings.creatorRights,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                            Text(
+                                text = strings.creatorRights,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ExpressiveSurface(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText("TikTok Handle", "@${preferences.creatorHandle}")
                                 )
+                                onShowMessage(strings.creatorCopiedToast(preferences.creatorHandle))
+                            },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            restingCornerRadius = 22.dp,
+                            pressedCornerRadius = 11.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("copy_creator_handle_button")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .padding(horizontal = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(strings.creatorCopyHandle, fontWeight = FontWeight.SemiBold)
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Tactile3DSurface(
-                                onClick = {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText("TikTok Handle", "@${preferences.creatorHandle}")
+                        ExpressiveSurface(
+                            onClick = {
+                                val url = "https://www.tiktok.com/@${preferences.creatorHandle}"
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
                                     )
-                                    onShowMessage(strings.creatorCopiedToast(preferences.creatorHandle))
-                                },
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("copy_creator_handle_button")
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .padding(horizontal = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(strings.creatorCopyHandle, fontWeight = FontWeight.SemiBold)
+                                }.onFailure {
+                                    onShowMessage(strings.creatorOpenFailed)
                                 }
-                            }
-
-                            Tactile3DSurface(
-                                onClick = {
-                                    val url = "https://www.tiktok.com/@${preferences.creatorHandle}"
-                                    runCatching {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            }
-                                        )
-                                    }.onFailure {
-                                        onShowMessage(strings.creatorOpenFailed)
-                                    }
-                                },
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            restingCornerRadius = 22.dp,
+                            pressedCornerRadius = 11.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("open_creator_tiktok_button")
+                        ) {
+                            Row(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .testTag("open_creator_tiktok_button")
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .padding(horizontal = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 48.dp)
-                                        .padding(horizontal = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(strings.creatorOpenHandle, fontWeight = FontWeight.Bold)
-                                }
+                                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(strings.creatorOpenHandle, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -332,8 +326,7 @@ fun SettingsScreen(
         item {
             SettingsCard(
                 title = strings.settingsLanguageTitle,
-                icon = Icons.Rounded.Language,
-                modifier = Modifier.animateItem()
+                icon = Icons.Rounded.Language
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -341,7 +334,7 @@ fun SettingsScreen(
                 ) {
                     AppLanguage.entries.forEach { lang ->
                         val selected = preferences.language == lang
-                        Tactile3DSurface(
+                        ExpressiveSurface(
                             onClick = { viewModel.setLanguage(lang) },
                             containerColor = if (selected) {
                                 MaterialTheme.colorScheme.primaryContainer
@@ -353,7 +346,8 @@ fun SettingsScreen(
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
-                            bevelDepth = if (selected) 4.dp else 2.dp,
+                            restingCornerRadius = 22.dp,
+                            pressedCornerRadius = 11.dp,
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("language_${lang.code}")
@@ -376,12 +370,11 @@ fun SettingsScreen(
             }
         }
 
-        // 3D Tactile & Expressive Motion Settings
+        // Expressive Motion & Shapes Settings
         item {
             SettingsCard(
                 title = strings.settingsExpressiveTitle,
-                icon = Icons.Rounded.Animation,
-                modifier = Modifier.animateItem()
+                icon = Icons.Rounded.Animation
             ) {
                 SettingsSwitchRow(
                     title = strings.settingsExpressiveAnimations,
@@ -423,8 +416,7 @@ fun SettingsScreen(
         item {
             SettingsCard(
                 title = strings.settingsAppearanceTitle,
-                icon = Icons.Rounded.Palette,
-                modifier = Modifier.animateItem()
+                icon = Icons.Rounded.Palette
             ) {
                 Text(
                     text = strings.settingsThemeMode,
@@ -467,7 +459,7 @@ fun SettingsScreen(
                     AppColorPalette.entries.forEach { palette ->
                         val previewScheme = paletteColorScheme(palette, darkTheme = true)
                         val isSelected = !preferences.useDynamicColors && preferences.colorPalette == palette
-                        Tactile3DSurface(
+                        ExpressiveSurface(
                             onClick = {
                                 viewModel.setUseDynamicColors(false)
                                 viewModel.setColorPalette(palette)
@@ -482,7 +474,6 @@ fun SettingsScreen(
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
-                            bevelDepth = if (isSelected) 3.dp else 2.dp,
                             restingCornerRadius = 18.dp,
                             pressedCornerRadius = 10.dp,
                             modifier = Modifier.testTag("palette_${palette.name}")
@@ -529,8 +520,7 @@ fun SettingsScreen(
         item {
             SettingsCard(
                 title = strings.settingsTypographyTitle,
-                icon = Icons.Rounded.FormatSize,
-                modifier = Modifier.animateItem()
+                icon = Icons.Rounded.FormatSize
             ) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -564,8 +554,7 @@ fun SettingsScreen(
         item {
             SettingsCard(
                 title = strings.settingsBrowsingTitle,
-                icon = Icons.Rounded.Visibility,
-                modifier = Modifier.animateItem()
+                icon = Icons.Rounded.Visibility
             ) {
                 SettingsSwitchRow(
                     title = strings.settingsShowHidden,
@@ -626,7 +615,7 @@ fun SettingsScreen(
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Tactile3DSurface(
+                ExpressiveSurface(
                     onClick = {
                         viewModel.clearTempCache { freed ->
                             onShowMessage(strings.settingsCacheCleared(strings.formatBytes(freed)))
@@ -634,6 +623,8 @@ fun SettingsScreen(
                     },
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface,
+                    restingCornerRadius = 18.dp,
+                    pressedCornerRadius = 10.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -670,8 +661,7 @@ fun SettingsScreen(
             item {
                 SettingsCard(
                     title = strings.settingsSafFoldersTitle,
-                    icon = Icons.Rounded.FolderShared,
-                    modifier = Modifier.animateItem()
+                    icon = Icons.Rounded.FolderShared
                 ) {
                     preferences.safTreeUris.forEach { uriStr ->
                         Row(
@@ -743,47 +733,34 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val cardColor = MaterialTheme.colorScheme.surfaceContainerLow
-    val bevelColor = remember(cardColor) { lerp(cardColor, Color.Black, 0.28f) }
-    val rimColor = remember(cardColor) { lerp(cardColor, Color.White, 0.08f) }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(bevelColor)
-            .padding(bottom = 3.dp)
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp,
+        modifier = modifier.fillMaxWidth()
     ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = cardColor,
-            border = BorderStroke(1.dp, rimColor),
-            tonalElevation = 1.dp,
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                content()
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
+            content()
         }
     }
 }

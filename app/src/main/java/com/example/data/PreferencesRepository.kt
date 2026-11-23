@@ -41,9 +41,9 @@ class PreferencesRepository(private val context: Context) {
     }
 
     val preferencesFlow: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
-        val rawHandle = prefs[Keys.CREATOR_HANDLE]?.takeIf { it.isNotBlank() }
-        val resolvedHandle = when {
-            rawHandle == null || rawHandle == "ak.911" -> "ak.v911"
+        val rawHandle = prefs[Keys.CREATOR_HANDLE]?.trim()?.removePrefix("@")?.takeIf { it.isNotBlank() }
+        val resolvedHandle = when (rawHandle?.lowercase()) {
+            null, "ak.911", "ak_911", "ak911" -> "ak.v911"
             else -> rawHandle
         }
         UserPreferences(

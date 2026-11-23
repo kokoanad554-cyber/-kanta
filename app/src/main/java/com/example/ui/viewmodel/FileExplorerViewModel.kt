@@ -101,17 +101,40 @@ class FileExplorerViewModel(application: Application) : AndroidViewModel(applica
 
     init {
         refreshPermissionAndRoots()
-        loadDirectory(fileRepository.getInternalRootPath(), null)
         viewModelScope.launch {
+            var initialized = false
+            var lastShowHidden = preferences.value.showHiddenFiles
+            var lastSort = preferences.value.defaultSortOption
+            var lastShowSystem = preferences.value.showSystemPaths
+            var lastSafUris = preferences.value.safTreeUris
+
             preferencesRepository.preferencesFlow.collect { prefs ->
-                val roots = fileRepository.getStorageRoots(prefs.safTreeUris, prefs.showSystemPaths)
-                _uiState.update {
-                    it.copy(
-                        storageRoots = roots,
-                        sortOption = prefs.defaultSortOption
-                    )
+                val rootsChanged = !initialized ||
+                    prefs.showSystemPaths != lastShowSystem ||
+                    prefs.safTreeUris != lastSafUris
+                val sortChanged = prefs.defaultSortOption != lastSort
+                val hiddenChanged = prefs.showHiddenFiles != lastShowHidden
+
+                if (rootsChanged) {
+                    val roots = fileRepository.getStorageRoots(prefs.safTreeUris, prefs.showSystemPaths)
+                    _uiState.update { it.copy(storageRoots = roots) }
                 }
-                refreshCurrentDirectory()
+
+                if (!initialized) {
+                    initialized = true
+                    _uiState.update { it.copy(sortOption = prefs.defaultSortOption) }
+                    loadDirectory(fileRepository.getInternalRootPath(), null)
+                } else if (hiddenChanged) {
+                    _uiState.update { it.copy(sortOption = prefs.defaultSortOption) }
+                    refreshCurrentDirectory()
+                } else if (sortChanged) {
+                    updateSortOption(prefs.defaultSortOption)
+                }
+
+                lastShowHidden = prefs.showHiddenFiles
+                lastSort = prefs.defaultSortOption
+                lastShowSystem = prefs.showSystemPaths
+                lastSafUris = prefs.safTreeUris
             }
         }
     }

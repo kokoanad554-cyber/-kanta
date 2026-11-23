@@ -27,12 +27,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.FormatListNumbered
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,7 +68,8 @@ import com.example.data.FileRepository
 import com.example.localization.LocalAppStrings
 import com.example.model.FileCategory
 import com.example.model.FileItem
-import com.example.ui.components.Tactile3DSurface
+import com.example.ui.components.ExpressiveIconButton
+import com.example.ui.components.ExpressiveWavyProgressIndicator
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.theme.ReadexProFontFamily
 import kotlinx.coroutines.Dispatchers
@@ -188,17 +189,13 @@ private fun ColumnScope.TextDocumentView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Tactile3DSurface(
+                ExpressiveIconButton(
                     onClick = onClose,
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    restingCornerRadius = 16.dp,
-                    pressedCornerRadius = 10.dp,
-                    bevelDepth = 2.5.dp,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .testTag("doc_viewer_back")
+                    size = 48.dp,
+                    modifier = Modifier.testTag("doc_viewer_back")
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(22.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -276,7 +273,10 @@ private fun ColumnScope.TextDocumentView(
     ) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                ExpressiveWavyProgressIndicator(
+                    progress = null,
+                    modifier = Modifier.widthIn(max = 220.dp)
+                )
             }
         } else {
             val textFont = if (item.category == FileCategory.CODE) JetBrainsMonoFontFamily else ReadexProFontFamily
@@ -397,15 +397,12 @@ private fun ColumnScope.PdfDocumentView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Tactile3DSurface(
+                ExpressiveIconButton(
                     onClick = onClose,
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    restingCornerRadius = 16.dp,
-                    pressedCornerRadius = 10.dp,
-                    bevelDepth = 2.5.dp,
-                    modifier = Modifier.size(44.dp)
+                    size = 48.dp
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(22.dp))
                 }
                 Column {
                     Text(
@@ -423,7 +420,7 @@ private fun ColumnScope.PdfDocumentView(
                 }
             }
             IconButton(onClick = { fileRepository.openExternally(item) }) {
-                Icon(Icons.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
             }
         }
     }
@@ -437,7 +434,10 @@ private fun ColumnScope.PdfDocumentView(
     ) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                ExpressiveWavyProgressIndicator(
+                    progress = null,
+                    modifier = Modifier.widthIn(max = 220.dp)
+                )
             }
         } else {
             LazyColumn(
@@ -497,15 +497,12 @@ private fun ColumnScope.ImageDocumentView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                Tactile3DSurface(
+                ExpressiveIconButton(
                     onClick = onClose,
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    restingCornerRadius = 16.dp,
-                    pressedCornerRadius = 10.dp,
-                    bevelDepth = 2.5.dp,
-                    modifier = Modifier.size(44.dp)
+                    size = 48.dp
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(22.dp))
                 }
                 Text(
                     text = item.name,
@@ -516,7 +513,7 @@ private fun ColumnScope.ImageDocumentView(
                 )
             }
             IconButton(onClick = { fileRepository.openExternally(item) }) {
-                Icon(Icons.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = strings.docOpenExternal)
             }
         }
     }

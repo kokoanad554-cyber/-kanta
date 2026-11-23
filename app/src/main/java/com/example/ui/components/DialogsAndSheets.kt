@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Android
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Close
@@ -32,19 +34,16 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Html
 import androidx.compose.material.icons.rounded.InstallMobile
-import androidx.compose.material.icons.rounded.InsertDriveFile
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Unarchive
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -135,7 +134,7 @@ fun CreateFileDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(26.dp),
-        icon = { Icon(Icons.Rounded.InsertDriveFile, contentDescription = null) },
+        icon = { Icon(Icons.AutoMirrored.Rounded.InsertDriveFile, contentDescription = null) },
         title = { Text(strings.createFileTitle) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -331,9 +330,12 @@ fun FileOperationProgressDialog(
                     overflow = TextOverflow.Ellipsis
                 )
                 if (progress.isIndeterminate) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    ExpressiveWavyProgressIndicator(
+                        progress = null,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 } else {
-                    LinearProgressIndicator(
+                    ExpressiveWavyProgressIndicator(
                         progress = { progress.progressFraction },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -464,24 +466,26 @@ fun FileDetailsSheet(
                         Text(strings.htmlEditor)
                     }
                 }
-                Tactile3DSurface(
+                ExpressiveSurface(
                     onClick = {
                         onDismiss()
                         onOpenExternal(item)
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
+                    restingCornerRadius = 24.dp,
+                    pressedCornerRadius = 12.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = 50.dp)
                             .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(strings.openExternal, fontWeight = FontWeight.Bold)
                     }
@@ -552,9 +556,13 @@ fun ApkPreviewSheet(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        CircularProgressIndicator()
+                        ExpressiveWavyProgressIndicator(
+                            progress = null,
+                            modifier = Modifier.widthIn(max = 200.dp)
+                        )
                         Text(strings.analyzingApk)
                     }
                 }
@@ -652,10 +660,12 @@ fun ApkPreviewSheet(
                     ) {
                         Text(strings.close)
                     }
-                    Tactile3DSurface(
+                    ExpressiveSurface(
                         onClick = { onInstall(metadata) },
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
+                        restingCornerRadius = 24.dp,
+                        pressedCornerRadius = 12.dp,
                         modifier = Modifier
                             .weight(1.4f)
                             .testTag("apk_install_button")
@@ -663,7 +673,7 @@ fun ApkPreviewSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 48.dp)
+                                .heightIn(min = 50.dp)
                                 .padding(horizontal = 12.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
@@ -756,7 +766,10 @@ fun ZipPreviewSheet(
                         .height(140.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    ExpressiveWavyProgressIndicator(
+                        progress = null,
+                        modifier = Modifier.widthIn(max = 200.dp)
+                    )
                 }
             } else {
                 Surface(
@@ -784,7 +797,7 @@ fun ZipPreviewSheet(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Icon(
-                                        imageVector = if (entry.isDirectory) Icons.Rounded.Folder else Icons.Rounded.InsertDriveFile,
+                                        imageVector = if (entry.isDirectory) Icons.Rounded.Folder else Icons.AutoMirrored.Rounded.InsertDriveFile,
                                         contentDescription = null,
                                         tint = if (entry.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(18.dp)
@@ -823,10 +836,12 @@ fun ZipPreviewSheet(
                 ) {
                     Text(strings.close)
                 }
-                Tactile3DSurface(
+                ExpressiveSurface(
                     onClick = { onExtractClick(zipItem) },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
+                    restingCornerRadius = 24.dp,
+                    pressedCornerRadius = 12.dp,
                     modifier = Modifier
                         .weight(1.4f)
                         .testTag("extract_zip_button")
@@ -834,7 +849,7 @@ fun ZipPreviewSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 48.dp)
+                            .heightIn(min = 50.dp)
                             .padding(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
@@ -988,7 +1003,12 @@ fun FolderPickerSheet(
                     .height(250.dp)
             ) {
                 if (isLoading) {
-                    Box(contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    Box(contentAlignment = Alignment.Center) {
+                        ExpressiveWavyProgressIndicator(
+                            progress = null,
+                            modifier = Modifier.widthIn(max = 180.dp)
+                        )
+                    }
                 } else if (folders.isEmpty()) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
@@ -1034,10 +1054,12 @@ fun FolderPickerSheet(
                 }
             }
 
-            Tactile3DSurface(
+            ExpressiveSurface(
                 onClick = { onConfirm(currentPath, currentSafUri) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
+                restingCornerRadius = 24.dp,
+                pressedCornerRadius = 12.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(

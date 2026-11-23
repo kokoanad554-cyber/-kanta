@@ -37,7 +37,6 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,7 +71,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.FileRepository
 import com.example.localization.LocalAppStrings
 import com.example.model.FileItem
-import com.example.ui.components.Tactile3DSurface
+import com.example.ui.components.ExpressiveIconButton
+import com.example.ui.components.ExpressiveWavyProgressIndicator
 import com.example.ui.theme.JetBrainsMonoFontFamily
 import kotlinx.coroutines.launch
 
@@ -198,19 +198,15 @@ fun HtmlEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Tactile3DSurface(
+                        ExpressiveIconButton(
                             onClick = {
                                 if (hasUnsavedChanges) showUnsavedDialog = true else onClose()
                             },
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            restingCornerRadius = 16.dp,
-                            pressedCornerRadius = 10.dp,
-                            bevelDepth = 2.5.dp,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .testTag("html_editor_back")
+                            size = 48.dp,
+                            modifier = Modifier.testTag("html_editor_back")
                         ) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(20.dp))
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = strings.back, modifier = Modifier.size(22.dp))
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
@@ -248,7 +244,7 @@ fun HtmlEditorScreen(
                                 Icon(Icons.Rounded.Search, contentDescription = strings.search)
                             }
                         }
-                        Tactile3DSurface(
+                        ExpressiveIconButton(
                             onClick = { isPreviewMode = !isPreviewMode },
                             containerColor = if (isPreviewMode) {
                                 MaterialTheme.colorScheme.primaryContainer
@@ -260,20 +256,16 @@ fun HtmlEditorScreen(
                             } else {
                                 MaterialTheme.colorScheme.onSurface
                             },
-                            restingCornerRadius = 16.dp,
-                            pressedCornerRadius = 10.dp,
-                            bevelDepth = 2.5.dp,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .testTag("html_editor_preview_toggle")
+                            size = 48.dp,
+                            modifier = Modifier.testTag("html_editor_preview_toggle")
                         ) {
                             Icon(
                                 imageVector = if (isPreviewMode) Icons.Rounded.Code else Icons.Rounded.Visibility,
                                 contentDescription = strings.htmlLivePreviewMode,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-                        Tactile3DSurface(
+                        ExpressiveIconButton(
                             onClick = { saveDocument() },
                             enabled = !isSaving && !isLoading,
                             containerColor = if (hasUnsavedChanges) {
@@ -286,14 +278,10 @@ fun HtmlEditorScreen(
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
-                            restingCornerRadius = 16.dp,
-                            pressedCornerRadius = 10.dp,
-                            bevelDepth = 2.5.dp,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .testTag("html_editor_save")
+                            size = 48.dp,
+                            modifier = Modifier.testTag("html_editor_save")
                         ) {
-                            Icon(Icons.Rounded.Save, contentDescription = strings.save, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Save, contentDescription = strings.save, modifier = Modifier.size(22.dp))
                         }
                     }
                 }
@@ -373,7 +361,10 @@ fun HtmlEditorScreen(
             ) {
                 if (isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                        ExpressiveWavyProgressIndicator(
+                            progress = null,
+                            modifier = Modifier.widthIn(max = 220.dp)
+                        )
                     }
                 } else if (isPreviewMode) {
                     AndroidView(

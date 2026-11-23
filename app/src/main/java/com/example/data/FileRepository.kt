@@ -197,7 +197,7 @@ class FileRepository(private val context: Context) {
                     if (!showHidden && (file.isHidden || name.startsWith("."))) return@mapNotNull null
                     val isDir = file.isDirectory
                     val (ext, cat) = classifyFile(name, isDir)
-                    val count = if (isDir) runCatching { file.list()?.size }.getOrNull() else null
+                    val count = if (isDir) countDirectoryChildrenFast(file) else null
                     FileItem(
                         id = file.absolutePath,
                         name = name,
@@ -217,6 +217,23 @@ class FileRepository(private val context: Context) {
             }
             sortItems(rawItems, sortOption)
         }
+    }
+
+    private fun countDirectoryChildrenFast(dir: File): Int? {
+        return runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                var count = 0
+                java.nio.file.Files.newDirectoryStream(dir.toPath()).use { stream ->
+                    for (ignored in stream) {
+                        count++
+                        if (count >= 1000) break
+                    }
+                }
+                count
+            } else {
+                dir.list()?.size
+            }
+        }.getOrNull()
     }
 
     fun sortItems(items: List<FileItem>, sortOption: SortOption): List<FileItem> {
